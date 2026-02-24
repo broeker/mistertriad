@@ -519,7 +519,7 @@ export default function App() {
           {prog.length===1&&!shownSecondHelper&&(
             <div className="flex items-center gap-1.5 ml-1 animate-fade-slide-in">
               <div className="animate-nudge"><svg width="20" height="16" viewBox="0 0 20 16"><path d="M16 8 L4 8" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round"/><path d="M9 3 L4 8 L9 13" stroke="#f59e0b" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg></div>
-              <span className="text-sm text-amber-300 font-medium">Add a second chord to start building your progression, Tex 🤠</span>
+              <span className="text-sm text-amber-300 font-medium">Grab a second chord, partner' 🤠</span>
             </div>
           )}
         </div>
