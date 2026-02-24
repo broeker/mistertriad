@@ -466,9 +466,10 @@ export default function App() {
   }),[chords,path,pathSets]);
 
   const distances=useMemo(()=>{
+    const minFret=f=>{const nz=f.filter(x=>x>0);return nz.length?Math.min(...nz):0;};
     const d=[];
     for (let i=1;i<path.length;i++){
-      if(path[i]&&path[i-1]){d.push(Math.round(avgFretPos(path[i].frets)-avgFretPos(path[i-1].frets)));}
+      if(path[i]&&path[i-1]){d.push(minFret(path[i].frets)-minFret(path[i-1].frets));}
       else d.push(null);
     }
     return d;
@@ -528,7 +529,7 @@ export default function App() {
           {prog.length===2&&!shownThirdHelper&&(
             <div className="flex items-center gap-1.5 ml-1 animate-fade-slide-in">
               <div className="animate-nudge"><svg width="20" height="16" viewBox="0 0 20 16"><path d="M16 8 L4 8" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round"/><path d="M9 3 L4 8 L9 13" stroke="#f59e0b" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg></div>
-              <span className="text-sm text-amber-300 font-medium">You're cooking now! 🤠</span>
+              <span className="text-sm text-amber-300 font-medium">You got it -- add and remove chords as needed. 🤠</span>
             </div>
           )}
         </div>
@@ -609,6 +610,10 @@ export default function App() {
 
             {overlayData&&<OverlayDiagram data={overlayData}/>}
           </div>
+
+          {prog.length===1&&(
+            <div className="text-xs text-gray-500 mt-3"><strong className="text-gray-400">Tip:</strong> Update your starting voicing (alt voicing) before adding your second chord for the smoothest transitions.</div>
+          )}
 
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-xs text-gray-400">
