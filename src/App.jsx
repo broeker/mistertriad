@@ -217,7 +217,7 @@ function OverlayDiagram({data,compact=false}) {
 }
 
 /* ---- Chord Diagram ---- */
-function FretDiag({voicing,strs,name,highlight,onClick,size="normal",setLabel}) {
+function FretDiag({voicing,strs,name,highlight,onClick,size="normal",setLabel,root}) {
   if (!voicing) return (
     <div className="flex flex-col items-center">
       {name&&<div className="text-sm font-bold text-amber-400 mb-1">{name}</div>}
@@ -246,15 +246,17 @@ function FretDiag({voicing,strs,name,highlight,onClick,size="normal",setLabel}) 
           {[0,1,2].map(i=>(<line key={i} x1={m.l+i*ss} y1={m.t} x2={m.l+i*ss} y2={m.t+nFrets*fs} stroke="#6b7280" strokeWidth={1.2}/>))}
           {strs.map((s,i)=>(<text key={s} x={m.l+i*ss} y={m.t-22} fontSize={sm?"9":"11"} fill="#9ca3af" textAnchor="middle" fontFamily="monospace">{SNAME[s]}</text>))}
           {frets.map((f,i)=>{
-            const isRoot=rootIdx.includes(i),nn=NOTES[notes[i]];
+            const isRoot=rootIdx.includes(i);
+            const iv=root!==undefined?((notes[i]-root+12)%12):null;
+            const label=iv!==null?(IV_LABEL[iv]||iv):NOTES[notes[i]];
             const col=isRoot?"#f59e0b":"#3b82f6",strk=isRoot?"#fbbf24":"#60a5fa",tc=isRoot?"#000":"#fff";
-            if (f===0){const cx=m.l+i*ss,cy=hasNut?m.t-5:m.t-8;return <g key={i}><circle cx={cx} cy={cy} r={dotR*0.75} fill={col} stroke={strk} strokeWidth={1.5}/><text x={cx} y={cy+0.5} fontSize={fSize} fill={tc} textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{nn}</text></g>;}
+            if (f===0){const cx=m.l+i*ss,cy=hasNut?m.t-5:m.t-8;return <g key={i}><circle cx={cx} cy={cy} r={dotR*0.75} fill={col} stroke={strk} strokeWidth={1.5}/><text x={cx} y={cy+0.5} fontSize={fSize} fill={tc} textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{label}</text></g>;}
             const x=m.l+i*ss,y=m.t+(f-startF-0.5)*fs;
-            return <g key={i}><circle cx={x} cy={y} r={dotR} fill={col} stroke={strk} strokeWidth={1.5}/><text x={x} y={y+0.5} fontSize={fSize} fill={tc} textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{nn}</text></g>;
+            return <g key={i}><circle cx={x} cy={y} r={dotR} fill={col} stroke={strk} strokeWidth={1.5}/><text x={x} y={y+0.5} fontSize={fSize} fill={tc} textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{label}</text></g>;
           })}
         </svg>
       </div>
-      <div className="text-xs text-gray-500 mt-2.5">{voicing.inv+rootStrLabel(voicing,strs)} · {frets.join('-')}</div>
+      <div className="text-xs text-gray-500 mt-2.5">({notes.map((n,j)=>{const nn=NOTES[n];return rootIdx.includes(j)?<strong key={j} className="text-gray-300">{nn}</strong>:nn;}).reduce((acc,el,j)=>j===0?[el]:[...acc,'-',el],[])}) Frets: {frets.join('-')}</div>
     </div>
   );
 }
@@ -555,7 +557,7 @@ export default function App() {
                 return (
                   <div key={i} className="flex items-start">
                     <div className="flex flex-col items-center">
-                      <FretDiag voicing={path[i]} strs={currSet?SETS[currSet].strs:SETS.s1.strs} name={ch.name+' ('+ch.numeral+')'} highlight={isOverridden} onClick={altVoicings[i]?.length>0?()=>setShowAltIdx(showAltIdx===i?null:i):undefined} setLabel={currSet?(currSet==='s1'?'3-2-1':'4-3-2'):null}/>
+                      <FretDiag voicing={path[i]} strs={currSet?SETS[currSet].strs:SETS.s1.strs} name={ch.name+' ('+ch.numeral+')'} highlight={isOverridden} onClick={altVoicings[i]?.length>0?()=>setShowAltIdx(showAltIdx===i?null:i):undefined} setLabel={currSet?(currSet==='s1'?'3-2-1':'4-3-2'):null} root={ch.root}/>
                       <div className="flex flex-col items-center gap-1 mt-1.5">
                         {altVoicings[i]?.length>0&&(
                           <button onClick={()=>setShowAltIdx(showAltIdx===i?null:i)} className={`px-3 py-1 rounded-md text-xs font-medium transition-all duration-200 w-full ${showAltIdx===i?'bg-emerald-600 text-white border border-emerald-500 shadow-lg shadow-emerald-500/30':isOverridden?'bg-amber-500 text-gray-900 border border-amber-400 hover:bg-amber-400':'bg-emerald-700 text-emerald-100 hover:bg-emerald-500 hover:text-white border border-emerald-600 hover:border-emerald-400'}`}>Alt voicing</button>
@@ -587,7 +589,7 @@ export default function App() {
                       <div className="flex flex-wrap gap-3">
                         {groupAlts.map((alt,i)=>(
                           <div key={i} className="flex flex-col items-center">
-                            <FretDiag voicing={alt.voicing} strs={SETS[alt.setKey].strs} name={null} highlight={overrides[showAltIdx]?.voicing===alt.voicing} onClick={()=>selectAlt(showAltIdx,alt)} size="small"/>
+                            <FretDiag voicing={alt.voicing} strs={SETS[alt.setKey].strs} name={null} highlight={overrides[showAltIdx]?.voicing===alt.voicing} onClick={()=>selectAlt(showAltIdx,alt)} size="small" root={chords[showAltIdx].root}/>
                             <button onClick={()=>selectAlt(showAltIdx,alt)} className="mt-1 px-2 py-0.5 rounded text-xs bg-gray-700 text-gray-300 hover:bg-emerald-700 hover:text-white transition-all">Use this</button>
                           </div>
                         ))}
