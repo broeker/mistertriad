@@ -457,7 +457,8 @@ export default function App() {
     for (const v of vsSame){if(currV&&voicingKey(v)===voicingKey(currV)) continue;alts.push({voicing:v,setKey:currSet});}
     const otherSet=currSet==='s1'?'s2':'s1';
     for (const v of getVoicings(ch.notes,ch.root,SETS[otherSet].strs)) alts.push({voicing:v,setKey:otherSet});
-    alts.sort((a,b)=>a.voicing.pos-b.voicing.pos);
+    const sortKey=v=>{const nz=v.frets.filter(f=>f>0);return nz.length?Math.min(...nz):0;};
+    alts.sort((a,b)=>sortKey(a.voicing)-sortKey(b.voicing)||a.voicing.pos-b.voicing.pos);
     return alts;
   }),[chords,path,pathSets]);
 
@@ -577,14 +578,23 @@ export default function App() {
                   <div className="text-xs text-emerald-400">Alternative voicings for <span className="font-bold">{chords[showAltIdx].name}</span> (lowest to highest fret)</div>
                   {overrides[showAltIdx]&&<button onClick={()=>clearAltOverride(showAltIdx)} className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Reset to default</button>}
                 </div>
-                <div className="flex flex-wrap gap-3">
-                  {altVoicings[showAltIdx].map((alt,i)=>(
-                    <div key={i} className="flex flex-col items-center">
-                      <FretDiag voicing={alt.voicing} strs={SETS[alt.setKey].strs} name={null} highlight={overrides[showAltIdx]?.voicing===alt.voicing} onClick={()=>selectAlt(showAltIdx,alt)} size="small" setLabel={alt.setKey==='s1'?'3-2-1':'4-3-2'}/>
-                      <button onClick={()=>selectAlt(showAltIdx,alt)} className="mt-1 px-2 py-0.5 rounded text-xs bg-gray-700 text-gray-300 hover:bg-emerald-700 hover:text-white transition-all">Use this</button>
+                {['s1','s2'].map(sk=>{
+                  const groupAlts=altVoicings[showAltIdx].filter(a=>a.setKey===sk);
+                  if (!groupAlts.length) return null;
+                  return (
+                    <div key={sk} className="mb-3">
+                      <div className="text-xs text-emerald-400 font-medium mb-2">{SETS[sk].label}</div>
+                      <div className="flex flex-wrap gap-3">
+                        {groupAlts.map((alt,i)=>(
+                          <div key={i} className="flex flex-col items-center">
+                            <FretDiag voicing={alt.voicing} strs={SETS[alt.setKey].strs} name={null} highlight={overrides[showAltIdx]?.voicing===alt.voicing} onClick={()=>selectAlt(showAltIdx,alt)} size="small"/>
+                            <button onClick={()=>selectAlt(showAltIdx,alt)} className="mt-1 px-2 py-0.5 rounded text-xs bg-gray-700 text-gray-300 hover:bg-emerald-700 hover:text-white transition-all">Use this</button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
             )}
 
