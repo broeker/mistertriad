@@ -405,7 +405,6 @@ export default function App() {
   const [key,setKey]=useState(0);
   const [prog,setProg]=useState([]);
   const [selectedQuality,setSelectedQuality]=useState('maj');
-  const [pickingStart,setPickingStart]=useState(false);
   const [startChoice,setStartChoice]=useState({setKey:'s1',voicingIdx:-1});
   const [overrides,setOverrides]=useState({});
   const [showAltIdx,setShowAltIdx]=useState(null);
@@ -439,7 +438,9 @@ export default function App() {
 
   const {path,pathSets}=useMemo(()=>{
     if (!chords.length||!selectedStart) return {path:[],pathSets:[]};
-    const p=[selectedStart],ps=[startSet];
+    const firstV=overrides[0]?overrides[0].voicing:selectedStart;
+    const firstS=overrides[0]?overrides[0].setKey:startSet;
+    const p=[firstV],ps=[firstS];
     for (let i=1;i<chords.length;i++){
       const ch=chords[i],prev=p[i-1];
       if (!prev){p.push(null);ps.push(ps[i-1]);continue;}
@@ -450,8 +451,8 @@ export default function App() {
   },[chords,selectedStart,startSet,overrides]);
 
   const altVoicings=useMemo(()=>chords.map((ch,i)=>{
-    if (i===0||!path[i-1]) return [];
-    const prev=path[i-1],currSet=pathSets[i],currV=path[i],alts=[];
+    if (i>0&&!path[i-1]) return [];
+    const currSet=pathSets[i],currV=path[i],alts=[];
     const vsSame=getVoicings(ch.notes,ch.root,SETS[currSet].strs);
     for (const v of vsSame){if(currV&&voicingKey(v)===voicingKey(currV)) continue;alts.push({voicing:v,setKey:currSet});}
     const otherSet=currSet==='s1'?'s2':'s1';
@@ -479,8 +480,6 @@ export default function App() {
   const removeChord=idx=>{setProg(p=>p.filter((_,i)=>i!==idx));if(idx===0)resetAll();setOverrides(prev=>{const n={};Object.entries(prev).forEach(([k,v])=>{const ki=parseInt(k);if(ki<idx)n[ki]=v;else if(ki>idx)n[ki-1]=v;});return n;});setShowAltIdx(null);setOverlayIdx(null);};
   const selectAlt=(ci,alt)=>{setOverrides(prev=>{const n={...prev};Object.keys(n).forEach(k=>{if(parseInt(k)>ci)delete n[k];});n[ci]=alt;return n;});setShowAltIdx(null);};
   const clearAltOverride=ci=>{setOverrides(prev=>{const n={...prev};delete n[ci];Object.keys(n).forEach(k=>{if(parseInt(k)>ci)delete n[k];});return n;});setShowAltIdx(null);};
-
-  const startVoicingKey=selectedStart?voicingKey(selectedStart):'';
 
   if (printMode && chords.length>0 && path.length>0) {
     return <PrintPreview chords={chords} path={path} pathSets={pathSets} distances={distances} keyName={NOTES[key]} onClose={()=>setPrintMode(false)}/>;
@@ -540,40 +539,8 @@ export default function App() {
                   Print View
                 </button>
               )}
-              <button onClick={()=>{setProg([]);resetAll();setPickingStart(false);setShownSecondHelper(false);}} className="px-3 py-1 rounded-md text-xs font-medium bg-gray-800 text-gray-400 border border-gray-700 hover:bg-red-600 hover:text-white hover:border-red-500 transition-all duration-200">Reset</button>
+              <button onClick={()=>{setProg([]);resetAll();setShownSecondHelper(false);}} className="px-3 py-1 rounded-md text-xs font-medium bg-gray-800 text-gray-400 border border-gray-700 hover:bg-red-600 hover:text-white hover:border-red-500 transition-all duration-200">Reset</button>
             </div>
-          </div>
-
-          <div className="mb-4">
-            <button onClick={()=>setPickingStart(!pickingStart)} className={`flex items-center gap-2 text-sm font-medium transition-all px-3 py-1.5 rounded-lg ${pickingStart?'bg-emerald-600/20 border border-emerald-500 text-emerald-300':'bg-gray-800 text-gray-300 border border-gray-700 hover:border-gray-500'}`}>
-              <span>{pickingStart?'▼':'▶'}</span>
-              Choose Starting Voicing for {chords[0]?.name}
-            </button>
-            {pickingStart&&(
-              <div className="bg-gray-900 rounded-xl p-4 mt-2 border border-gray-800 overflow-x-auto">
-                <div className="text-xs text-gray-400 mb-3">Pick a starting voicing — the rest of the progression voice-leads from here.</div>
-                {['s1','s2'].map(sk=>{
-                  const vs=firstVoicings[sk];
-                  if (!vs.length) return <div key={sk} className="mb-4"><div className="text-xs text-emerald-400 font-medium mb-2">{SETS[sk].label}</div><div className="text-xs text-gray-600 italic">No voicings on this string set</div></div>;
-                  return (
-                    <div key={sk} className="mb-4">
-                      <div className="text-xs text-emerald-400 font-medium mb-2">{SETS[sk].label}</div>
-                      <div className="flex flex-wrap gap-3">
-                        {vs.map((v,i)=>{
-                          const isActive=sk===startChoice.setKey&&voicingKey(v)===startVoicingKey;
-                          return (
-                            <div key={i} className="flex flex-col items-center">
-                              <FretDiag voicing={v} strs={SETS[sk].strs} name={null} highlight={isActive} onClick={()=>{setStartChoice({setKey:sk,voicingIdx:i});setOverrides({});setPickingStart(false);}} size="small"/>
-                              <button onClick={()=>{setStartChoice({setKey:sk,voicingIdx:i});setOverrides({});setPickingStart(false);}} className={`mt-1 px-2 py-0.5 rounded text-xs font-medium transition-all ${isActive?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>{isActive?'✓ Selected':'Select'}</button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
 
           <div className="bg-gray-900 rounded-xl p-4 border border-gray-800 overflow-x-auto">
@@ -587,9 +554,9 @@ export default function App() {
                 return (
                   <div key={i} className="flex items-start">
                     <div className="flex flex-col items-center">
-                      <FretDiag voicing={path[i]} strs={currSet?SETS[currSet].strs:SETS.s1.strs} name={ch.name+' ('+ch.numeral+')'} highlight={i===0||isOverridden} onClick={i>0?()=>setShowAltIdx(showAltIdx===i?null:i):undefined} setLabel={currSet?(currSet==='s1'?'3-2-1':'4-3-2'):null}/>
+                      <FretDiag voicing={path[i]} strs={currSet?SETS[currSet].strs:SETS.s1.strs} name={ch.name+' ('+ch.numeral+')'} highlight={isOverridden} onClick={altVoicings[i]?.length>0?()=>setShowAltIdx(showAltIdx===i?null:i):undefined} setLabel={currSet?(currSet==='s1'?'3-2-1':'4-3-2'):null}/>
                       <div className="flex flex-col items-center gap-1 mt-1.5">
-                        {i>0&&altVoicings[i]?.length>0&&(
+                        {altVoicings[i]?.length>0&&(
                           <button onClick={()=>setShowAltIdx(showAltIdx===i?null:i)} className={`px-3 py-1 rounded-md text-xs font-medium transition-all duration-200 w-full ${showAltIdx===i?'bg-emerald-600 text-white border border-emerald-500 shadow-lg shadow-emerald-500/30':isOverridden?'bg-amber-500 text-gray-900 border border-amber-400 hover:bg-amber-400':'bg-emerald-700 text-emerald-100 hover:bg-emerald-500 hover:text-white border border-emerald-600 hover:border-emerald-400'}`}>Alt voicing</button>
                         )}
                         {path[i]&&(
@@ -651,7 +618,7 @@ export default function App() {
       )}
 
       <div className="mt-6 text-xs text-gray-600 border-t border-gray-800 pt-4">
-        <p className="mb-3"><strong className="text-gray-500">How to use:</strong> Set chord quality, add chords, then expand "Choose Starting Voicing" to pick your first shape. Click "Alt voicing" on any chord for alternatives. Click <strong>Overlay</strong> to see the CAGED chord shape and pentatonic scale around any voicing.</p>
+        <p className="mb-3"><strong className="text-gray-500">How to use:</strong> Set chord quality, add chords. Click <strong>Alt voicing</strong> on any chord for alternatives. Click <strong>Overlay</strong> to see the CAGED chord shape and pentatonic scale around any voicing.</p>
         <p>7th chord voicings use shell voicings (root, 3rd/b3rd, 7th) — the 5th is omitted to fit 3 strings.</p>
       </div>
     </div>
