@@ -327,14 +327,16 @@ function PrintPreview({chords,path,pathSets,distances,keyName,onClose}) {
                     {[0,1,2].map(j=>(<line key={j} x1={mg.l+j*ss} y1={mg.t} x2={mg.l+j*ss} y2={mg.t+nFr*fs2} stroke="#999" strokeWidth={0.8}/>))}
                     {strs.map((s,j)=>(<text key={s} x={mg.l+j*ss} y={mg.t-18} fontSize="8" fill="#666" textAnchor="middle" fontFamily="monospace">{SNAME[s]}</text>))}
                     {frets.map((f,j)=>{
-                      const isR=rootIdx.includes(j),nn=NOTES[notes[j]];
+                      const isR=rootIdx.includes(j);
+                      const iv=((notes[j]-ch.root+12)%12);
+                      const label=IV_LABEL[iv]||iv;
                       const col=isR?'#b45309':'#2563eb';
-                      if (f===0){const cx=mg.l+j*ss,cy=hasNut?mg.t-5:mg.t-8;return <g key={j}><circle cx={cx} cy={cy} r={7} fill={col}/><text x={cx} y={cy+0.5} fontSize="7" fill="#fff" textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{nn}</text></g>;}
+                      if (f===0){const cx=mg.l+j*ss,cy=hasNut?mg.t-5:mg.t-8;return <g key={j}><circle cx={cx} cy={cy} r={7} fill={col}/><text x={cx} y={cy+0.5} fontSize="7" fill="#fff" textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{label}</text></g>;}
                       const x=mg.l+j*ss,y=mg.t+(f-startF-0.5)*fs2;
-                      return <g key={j}><circle cx={x} cy={y} r={9} fill={col}/><text x={x} y={y+0.5} fontSize="7" fill="#fff" textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{nn}</text></g>;
+                      return <g key={j}><circle cx={x} cy={y} r={9} fill={col}/><text x={x} y={y+0.5} fontSize="7" fill="#fff" textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{label}</text></g>;
                     })}
                   </svg>
-                  <div className="text-[7px] text-gray-500 mt-0.5">{v.inv+rootStrLabel(v,strs)} · {frets.join('-')}</div>
+                  <div className="text-[7px] text-gray-500 mt-0.5">({notes.map((n,j)=>{const nn=NOTES[n];return rootIdx.includes(j)?<strong key={j} className="text-gray-700">{nn}</strong>:nn;}).reduce((acc,el,j)=>j===0?[el]:[...acc,'-',el],[])}) Frets: {frets.join('-')}</div>
                 </div>
                 {i<chords.length-1&&distances[i]!==null&&(
                   <div className="flex flex-col items-center justify-center mx-0.5 pt-11">
