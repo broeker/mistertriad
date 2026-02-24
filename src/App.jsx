@@ -458,7 +458,7 @@ export default function App() {
     const otherSet=currSet==='s1'?'s2':'s1';
     for (const v of getVoicings(ch.notes,ch.root,SETS[otherSet].strs)) alts.push({voicing:v,setKey:otherSet});
     alts.sort((a,b)=>a.voicing.pos-b.voicing.pos);
-    return alts.slice(0,8);
+    return alts;
   }),[chords,path,pathSets]);
 
   const distances=useMemo(()=>{
