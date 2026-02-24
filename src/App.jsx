@@ -487,8 +487,9 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 p-4 max-w-4xl mx-auto font-sans">
-      <div className="flex items-center gap-3 mb-1">
+    <div className="min-h-screen bg-black text-gray-100 font-sans">
+    <div className="max-w-4xl mx-auto p-4">
+      <div className="flex items-center gap-3 mb-1 py-3">
         <svg width="56" height="56" viewBox="0 0 56 56" className="flex-shrink-0">
           <ellipse cx="28" cy="14" rx="18" ry="5" fill="#78716c"/><rect x="17" y="4" width="22" height="11" rx="4" fill="#a8a29e"/><rect x="10" y="13" width="36" height="3" rx="1.5" fill="#78716c"/><circle cx="28" cy="24" r="9" fill="#fde68a"/><circle cx="25" cy="22" r="1.2" fill="#1c1917"/><circle cx="31" cy="22" r="1.2" fill="#1c1917"/><path d="M24 26 Q28 29 32 26" stroke="#1c1917" strokeWidth="0.8" fill="none"/><path d="M20 26 Q22 36 28 38 Q34 36 36 26" fill="#d1d5db" stroke="#9ca3af" strokeWidth="0.5"/><path d="M22 27 Q24 34 28 36 Q32 34 34 27" fill="#e5e7eb"/><rect x="20" y="33" width="16" height="18" rx="3" fill="#3b82f6"/><rect x="22" y="33" width="12" height="10" rx="2" fill="#60a5fa"/><line x1="23" y1="33" x2="25" y2="39" stroke="#2563eb" strokeWidth="1.5"/><line x1="33" y1="33" x2="31" y2="39" stroke="#2563eb" strokeWidth="1.5"/><circle cx="25" cy="39" r="0.8" fill="#fbbf24"/><circle cx="31" cy="39" r="0.8" fill="#fbbf24"/><ellipse cx="42" cy="42" rx="7" ry="9" fill="#92400e" stroke="#78350f" strokeWidth="0.8"/><ellipse cx="42" cy="42" rx="4" ry="6" fill="#b45309"/><circle cx="42" cy="42" r="1.5" fill="#1c1917"/><rect x="41" y="28" width="2" height="15" rx="1" fill="#78350f"/><rect x="39" y="27" width="6" height="3" rx="1" fill="#92400e"/><path d="M35 38 Q38 40 40 42" stroke="#fde68a" strokeWidth="3" fill="none" strokeLinecap="round"/>
         </svg>
@@ -653,6 +654,7 @@ export default function App() {
         <p className="mb-3"><strong className="text-gray-500">How to use:</strong> Set chord quality, add chords, then expand "Choose Starting Voicing" to pick your first shape. Click "Alt voicing" on any chord for alternatives. Click <strong className="text-emerald-400">Overlay</strong> to see the CAGED chord shape and pentatonic scale around any voicing.</p>
         <p>7th chord voicings use shell voicings (root, 3rd/b3rd, 7th) — the 5th is omitted to fit 3 strings.</p>
       </div>
+    </div>
     </div>
   );
 }
