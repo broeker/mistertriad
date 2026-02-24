@@ -413,7 +413,6 @@ export default function App() {
   const [overrides,setOverrides]=useState({});
   const [showAltIdx,setShowAltIdx]=useState(null);
   const [shownSecondHelper,setShownSecondHelper]=useState(false);
-  const [shownThirdHelper,setShownThirdHelper]=useState(false);
   const [overlayIdx,setOverlayIdx]=useState(null);
   const [printMode,setPrintMode]=useState(false);
 
@@ -483,7 +482,7 @@ export default function App() {
     return computeOverlay(ch.root,ch.quality,path[overlayIdx],SETS[sk].strs);
   },[overlayIdx,chords,path,pathSets]);
 
-  const addChord=deg=>{const d=DEGS[deg];setProg(p=>{if(p.length>=1)setShownSecondHelper(true);if(p.length>=2)setShownThirdHelper(true);return[...p,{deg:d.i,q:selectedQuality,numeral:d.n}];});};
+  const addChord=deg=>{const d=DEGS[deg];setProg(p=>{if(p.length>=1)setShownSecondHelper(true);return[...p,{deg:d.i,q:selectedQuality,numeral:d.n}];});};
   const removeChord=idx=>{setProg(p=>p.filter((_,i)=>i!==idx));if(idx===0)resetAll();setOverrides(prev=>{const n={};Object.entries(prev).forEach(([k,v])=>{const ki=parseInt(k);if(ki<idx)n[ki]=v;else if(ki>idx)n[ki-1]=v;});return n;});setShowAltIdx(null);setOverlayIdx(null);};
   const selectAlt=(ci,alt)=>{setOverrides(prev=>{const n={...prev};Object.keys(n).forEach(k=>{if(parseInt(k)>ci)delete n[k];});n[ci]=alt;return n;});setShowAltIdx(null);};
   const clearAltOverride=ci=>{setOverrides(prev=>{const n={...prev};delete n[ci];Object.keys(n).forEach(k=>{if(parseInt(k)>ci)delete n[k];});return n;});setShowAltIdx(null);};
@@ -519,19 +518,13 @@ export default function App() {
           {prog.length===0&&(
             <div className="flex items-center gap-1.5 ml-1 animate-fade-slide-in">
               <div className="animate-nudge"><svg width="20" height="16" viewBox="0 0 20 16"><path d="M16 8 L4 8" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round"/><path d="M9 3 L4 8 L9 13" stroke="#f59e0b" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg></div>
-              <span className="text-sm text-amber-300 font-medium">Pick a chord, partner' 🤠</span>
+              <span className="text-sm text-amber-300 font-medium">Pick a starting chord, partner 🤠</span>
             </div>
           )}
           {prog.length===1&&!shownSecondHelper&&(
             <div className="flex items-center gap-1.5 ml-1 animate-fade-slide-in">
               <div className="animate-nudge"><svg width="20" height="16" viewBox="0 0 20 16"><path d="M16 8 L4 8" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round"/><path d="M9 3 L4 8 L9 13" stroke="#f59e0b" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg></div>
-              <span className="text-sm text-amber-300 font-medium">Grab a second chord 🤠</span>
-            </div>
-          )}
-          {prog.length===2&&!shownThirdHelper&&(
-            <div className="flex items-center gap-1.5 ml-1 animate-fade-slide-in">
-              <div className="animate-nudge"><svg width="20" height="16" viewBox="0 0 20 16"><path d="M16 8 L4 8" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round"/><path d="M9 3 L4 8 L9 13" stroke="#f59e0b" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg></div>
-              <span className="text-sm text-amber-300 font-medium">You got it -- add and remove chords as needed. 🤠</span>
+              <span className="text-sm text-amber-300 font-medium">Grab a few more to build your progression 🤠</span>
             </div>
           )}
         </div>
@@ -552,7 +545,7 @@ export default function App() {
                   Print View
                 </button>
               )}
-              <button onClick={()=>{setProg([]);resetAll();setShownSecondHelper(false);setShownThirdHelper(false);}} className="px-3 py-1 rounded-md text-xs font-medium bg-gray-800 text-gray-400 border border-gray-700 hover:bg-red-600 hover:text-white hover:border-red-500 transition-all duration-200">Reset</button>
+              <button onClick={()=>{setProg([]);resetAll();setShownSecondHelper(false);}} className="px-3 py-1 rounded-md text-xs font-medium bg-gray-800 text-gray-400 border border-gray-700 hover:bg-red-600 hover:text-white hover:border-red-500 transition-all duration-200">Reset</button>
             </div>
           </div>
 
@@ -644,8 +637,7 @@ export default function App() {
       )}
 
       <div className="mt-6 text-xs text-gray-600 border-t border-gray-800 pt-4">
-        <p className="mb-3"><strong className="text-gray-500">How to use:</strong> Set chord quality, add chords. Click <strong>Alt voicing</strong> on any chord for alternatives. Click <strong>Overlay</strong> to see the CAGED chord shape and pentatonic scale around any voicing.</p>
-        <p>7th chord voicings use shell voicings (root, 3rd/b3rd, 7th) — the 5th is omitted to fit 3 strings.</p>
+        <p><strong className="text-gray-500">How to use:</strong> Set chord quality, add chords. Click <strong>Alt voicing</strong> on any chord for alternatives. Click <strong>Overlay</strong> to see the CAGED chord shape and pentatonic scale around any voicing. 7th chord voicings use shell voicings (root, 3rd/b3rd, 7th) — the 5th is omitted to fit 3 strings.</p>
       </div>
     </div>
     </div>
