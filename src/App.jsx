@@ -651,7 +651,7 @@ export default function App() {
       )}
 
       <div className="mt-6 text-xs text-gray-600 border-t border-gray-800 pt-4">
-        <p className="mb-3"><strong className="text-gray-500">How to use:</strong> Set chord quality, add chords, then expand "Choose Starting Voicing" to pick your first shape. Click "Alt voicing" on any chord for alternatives. Click <strong className="text-emerald-400">Overlay</strong> to see the CAGED chord shape and pentatonic scale around any voicing.</p>
+        <p className="mb-3"><strong className="text-gray-500">How to use:</strong> Set chord quality, add chords, then expand "Choose Starting Voicing" to pick your first shape. Click "Alt voicing" on any chord for alternatives. Click <strong>Overlay</strong> to see the CAGED chord shape and pentatonic scale around any voicing.</p>
         <p>7th chord voicings use shell voicings (root, 3rd/b3rd, 7th) — the 5th is omitted to fit 3 strings.</p>
       </div>
     </div>
