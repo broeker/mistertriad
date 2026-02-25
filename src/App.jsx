@@ -173,6 +173,7 @@ function computeOverlay(root,quality,voicing,strs) {
 
 /* ---- Overlay Fretboard (Vertical) ---- */
 function OverlayDiagram({data,compact=false}) {
+  const [activeLayer,setActiveLayer]=useState(null);
   if (!data) return null;
   const {chordNotes,pentNotes,shapeName,rStart,rEnd,triadStrs,triadFrets,triadNotes,triadRootIdx,root}=data;
   const nF=rEnd-rStart;
@@ -188,16 +189,30 @@ function OverlayDiagram({data,compact=false}) {
   const rc=compact?'#b45309':'#f59e0b',bc=compact?'#2563eb':'#3b82f6';
   const rs=compact?'#b45309':'#fbbf24',bs=compact?'#2563eb':'#60a5fa';
 
+  const toggleLayer=layer=>{ if (!compact) setActiveLayer(prev=>prev===layer?null:layer); };
+  const pentOp=(!compact&&activeLayer!==null&&activeLayer!=='pent')?0.1:1;
+  const cagedOp=(!compact&&activeLayer!==null&&activeLayer!=='caged')?0.1:1;
+  const triadOp=(!compact&&activeLayer!==null&&activeLayer!=='triad')?0.1:1;
+
   return (
     <div className={compact?'':'mt-3 bg-gray-900/80 rounded-xl p-4 border border-gray-700 overflow-x-auto'}>
       <div className={`flex items-center gap-3 flex-wrap ${compact?'mb-1':'mb-3'}`}>
-        {shapeName&&<span className={`font-bold ${compact?'text-xs text-emerald-600':'text-sm text-emerald-400'}`}>CAGED: <span className={compact?'text-amber-700':'text-amber-300'}>{shapeName}</span></span>}
+        {shapeName&&(compact
+          ? <span className="text-xs font-bold text-emerald-600">CAGED: <span className="text-amber-700">{shapeName}</span></span>
+          : <button onClick={()=>toggleLayer('caged')} title="Click to isolate CAGED shape" className={`text-sm font-bold text-emerald-400 hover:text-emerald-300 px-1.5 py-0.5 rounded transition-all ${activeLayer==='caged'?'bg-cyan-500/15 ring-1 ring-cyan-500/50':''}`}>CAGED: <span className="text-amber-300">{shapeName}</span></button>
+        )}
         {!compact&&(
-          <div className="flex items-center gap-3 text-xs text-gray-400 flex-wrap">
-            <span className="inline-flex items-center gap-1"><span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-emerald-400 bg-emerald-400/20"></span>Pentatonic</span>
-            <span className="inline-flex items-center gap-1"><span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-cyan-400 bg-cyan-400/20"></span>CAGED chord shape</span>
-            <span className="inline-flex items-center gap-1"><span className="inline-block w-3.5 h-3.5 rounded-full bg-amber-500"></span>Triad (root)</span>
-            <span className="inline-flex items-center gap-1"><span className="inline-block w-3.5 h-3.5 rounded-full bg-blue-500"></span>Triad (other)</span>
+          <div className="flex items-center gap-2 text-xs flex-wrap">
+            <button onClick={()=>toggleLayer('pent')} title="Click to isolate pentatonic scale" className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded transition-all ${activeLayer==='pent'?'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/50':'text-gray-400 hover:text-emerald-300 hover:bg-emerald-500/10'}`}>
+              <span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-emerald-400 bg-emerald-400/20 flex-shrink-0"></span>Pentatonic
+            </button>
+            <button onClick={()=>toggleLayer('caged')} title="Click to isolate CAGED chord shape" className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded transition-all ${activeLayer==='caged'?'bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/50':'text-gray-400 hover:text-cyan-300 hover:bg-cyan-500/10'}`}>
+              <span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-cyan-400 bg-cyan-400/20 flex-shrink-0"></span>CAGED chord
+            </button>
+            <button onClick={()=>toggleLayer('triad')} title="Click to isolate triad" className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded transition-all ${activeLayer==='triad'?'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/50':'text-gray-400 hover:text-amber-300 hover:bg-amber-500/10'}`}>
+              <span className="inline-flex gap-0.5 flex-shrink-0"><span className="inline-block w-3 h-3 rounded-full bg-amber-500"></span><span className="inline-block w-3 h-3 rounded-full bg-blue-500"></span></span>Triad
+            </button>
+            {activeLayer!==null&&<button onClick={()=>setActiveLayer(null)} className="text-gray-600 hover:text-gray-400 transition-colors text-[10px] ml-1">show all</button>}
           </div>
         )}
       </div>
@@ -207,9 +222,15 @@ function OverlayDiagram({data,compact=false}) {
           {Array.from({length:nF},(_,i)=>{const f=rStart+i+1;return f>=1?<text key={i} x={ml-14} y={fy(rStart+i+1)-fretSp/2+4} fontSize={compact?7:10} fill={compact?'#999':'#6b7280'} textAnchor="middle">{f}</text>:null;})}
           {so.map((s,i)=>(<g key={s}><line x1={sx(i)} y1={fy(rStart)} x2={sx(i)} y2={fy(rEnd)} stroke={compact?'#999':'#6b7280'} strokeWidth={s>=4?(compact?1:1.4):(compact?0.7:1)}/><text x={sx(i)} y={mt-14} fontSize={compact?7:10} fill={compact?'#888':'#9ca3af'} textAnchor="middle" fontFamily="monospace">{SNAME[s]}</text></g>))}
           {[3,5,7,9,12,15].filter(f=>f>rStart&&f<=rEnd).map(f=>{const y=fy(f)-fretSp/2;if(f===12) return <g key={f}><circle cx={sx(1)} cy={y} r={3} fill={compact?'#ddd':'#374151'}/><circle cx={sx(4)} cy={y} r={3} fill={compact?'#ddd':'#374151'}/></g>;return <circle key={f} cx={(sx(2)+sx(3))/2} cy={y} r={3} fill={compact?'#ddd':'#374151'}/>;})}
-          {pentNotes.map((n,i)=>{const si=so.indexOf(n.string);if(si<0) return null;const x=sx(si),y=n.fret===0?(hasNut?fy(0)-12:nY(0)):nY(n.fret);const isR=n.interval===0;return <g key={'p'+i}><circle cx={x} cy={y} r={dr} fill={isR?'rgba(251,191,36,0.15)':'rgba(16,185,129,0.15)'} stroke={isR?(compact?'#b45309':'#fbbf24'):(compact?'#059669':'#10b981')} strokeWidth={compact?1:1.5}/><text x={x} y={y+0.5} fontSize={f1} fill={isR?(compact?'#b45309':'#fbbf24'):(compact?'#059669':'#6ee7b7')} textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{IV_LABEL[n.interval]||n.interval}</text></g>;})}
-          {chordNotes.map((n,i)=>{const si=so.indexOf(n.string);if(si<0) return null;const x=sx(si),y=n.fret===0?(hasNut?fy(0)-12:nY(0)):nY(n.fret);const isR=n.interval===0;return <g key={'c'+i}><circle cx={x} cy={y} r={cr2} fill={isR?'rgba(251,191,36,0.15)':'rgba(34,211,238,0.15)'} stroke={isR?(compact?'#b45309':'#fbbf24'):(compact?'#06b6d4':'#22d3ee')} strokeWidth={compact?1.5:2}/><text x={x} y={y+0.5} fontSize={f2} fill={isR?(compact?'#b45309':'#fbbf24'):(compact?'#06b6d4':'#22d3ee')} textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{IV_LABEL[n.interval]||n.interval}</text></g>;})}
-          {triadStrs.map((s,i)=>{const si=so.indexOf(s);if(si<0) return null;const f=triadFrets[i],x=sx(si),y=f===0?(hasNut?fy(0)-12:nY(0)):nY(f);const isR=triadRootIdx.includes(i);const iv=gIv(triadNotes[i]),label=iv===0?'R':(IV_LABEL[iv]||iv);return <g key={'t'+i}><circle cx={x} cy={y} r={tr} fill={isR?rc:bc} stroke={isR?rs:bs} strokeWidth={2}/><text x={x} y={y+0.5} fontSize={f3} fill={isR?'#000':'#fff'} textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{label}</text></g>;})}
+          <g opacity={pentOp} style={{transition:'opacity 0.2s'}}>
+            {pentNotes.map((n,i)=>{const si=so.indexOf(n.string);if(si<0) return null;const x=sx(si),y=n.fret===0?(hasNut?fy(0)-12:nY(0)):nY(n.fret);const isR=n.interval===0;return <g key={'p'+i}><circle cx={x} cy={y} r={dr} fill={isR?'rgba(251,191,36,0.15)':'rgba(16,185,129,0.15)'} stroke={isR?(compact?'#b45309':'#fbbf24'):(compact?'#059669':'#10b981')} strokeWidth={compact?1:1.5}/><text x={x} y={y+0.5} fontSize={f1} fill={isR?(compact?'#b45309':'#fbbf24'):(compact?'#059669':'#6ee7b7')} textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{IV_LABEL[n.interval]||n.interval}</text></g>;})}
+          </g>
+          <g opacity={cagedOp} style={{transition:'opacity 0.2s'}}>
+            {chordNotes.map((n,i)=>{const si=so.indexOf(n.string);if(si<0) return null;const x=sx(si),y=n.fret===0?(hasNut?fy(0)-12:nY(0)):nY(n.fret);const isR=n.interval===0;return <g key={'c'+i}><circle cx={x} cy={y} r={cr2} fill={isR?'rgba(251,191,36,0.15)':'rgba(34,211,238,0.15)'} stroke={isR?(compact?'#b45309':'#fbbf24'):(compact?'#06b6d4':'#22d3ee')} strokeWidth={compact?1.5:2}/><text x={x} y={y+0.5} fontSize={f2} fill={isR?(compact?'#b45309':'#fbbf24'):(compact?'#06b6d4':'#22d3ee')} textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{IV_LABEL[n.interval]||n.interval}</text></g>;})}
+          </g>
+          <g opacity={triadOp} style={{transition:'opacity 0.2s'}}>
+            {triadStrs.map((s,i)=>{const si=so.indexOf(s);if(si<0) return null;const f=triadFrets[i],x=sx(si),y=f===0?(hasNut?fy(0)-12:nY(0)):nY(f);const isR=triadRootIdx.includes(i);const iv=gIv(triadNotes[i]),label=iv===0?'R':(IV_LABEL[iv]||iv);return <g key={'t'+i}><circle cx={x} cy={y} r={tr} fill={isR?rc:bc} stroke={isR?rs:bs} strokeWidth={2}/><text x={x} y={y+0.5} fontSize={f3} fill={isR?'#000':'#fff'} textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{label}</text></g>;})}
+          </g>
         </svg>
       </div>
     </div>
