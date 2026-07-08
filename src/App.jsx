@@ -1,128 +1,10 @@
-import { useState, useMemo, useCallback } from "react";
-
-const NOTES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-const OPEN = { 1:4, 2:11, 3:7, 4:2, 5:9, 6:4 };
-const SNAME = { 1:'E', 2:'B', 3:'G', 4:'D', 5:'A', 6:'E' };
-const SETS = {
-  s1: { strs:[3,2,1], label:'Strings 3-2-1 (G, B, E)' },
-  s2: { strs:[4,3,2], label:'Strings 4-3-2 (D, G, B)' },
-};
-const SCALE = [0,2,4,5,7,9,11];
-const DEGS = [
-  {n:'I',i:0,q:'maj'},{n:'ii',i:1,q:'min'},{n:'iii',i:2,q:'min'},
-  {n:'IV',i:3,q:'maj'},{n:'V',i:4,q:'maj'},{n:'vi',i:5,q:'min'},
-  {n:'vii°',i:6,q:'dim'},
-];
-const QS = {
-  maj:{iv:[0,4,7],s:'',l:'Major'},
-  min:{iv:[0,3,7],s:'m',l:'Minor'},
-  dim:{iv:[0,3,6],s:'°',l:'Dim'},
-  aug:{iv:[0,4,8],s:'+',l:'Aug'},
-  sus2:{iv:[0,2,7],s:'sus2',l:'Sus2'},
-  sus4:{iv:[0,5,7],s:'sus4',l:'Sus4'},
-  '7':{iv:[0,4,10],s:'7',l:'Dom7'},
-  maj7:{iv:[0,4,11],s:'maj7',l:'Maj7'},
-  min7:{iv:[0,3,10],s:'m7',l:'Min7'},
-};
-const QKEYS = Object.keys(QS);
-const IV_LABEL = {0:'R',2:'2',3:'♭3',4:'3',5:'4',6:'♭5',7:'5',8:'♯5',9:'6',10:'♭7',11:'7'};
-
-const CAGED = {
-  maj: [
-    {n:'E',a:6,t:{6:[[0,0]],5:[[2,7]],4:[[2,0]],3:[[1,4]],2:[[0,7]],1:[[0,0]]}},
-    {n:'G',a:6,t:{6:[[0,0]],5:[[-1,4]],4:[[-3,7]],3:[[-3,0]],2:[[-3,4]],1:[[0,0]]}},
-    {n:'A',a:5,t:{5:[[0,0]],4:[[2,7]],3:[[2,0]],2:[[2,4]],1:[[0,7]]}},
-    {n:'C',a:5,t:{5:[[0,0]],4:[[-1,4]],3:[[-3,7]],2:[[-2,0]],1:[[-3,4]]}},
-    {n:'D',a:4,t:{4:[[0,0]],3:[[2,7]],2:[[3,0]],1:[[2,4]]}},
-  ],
-  min: [
-    {n:'Em',a:6,t:{6:[[0,0]],5:[[2,7]],4:[[2,0]],3:[[0,3]],2:[[0,7]],1:[[0,0]]}},
-    {n:'Am',a:5,t:{5:[[0,0]],4:[[2,7]],3:[[2,0]],2:[[1,3]],1:[[0,7]]}},
-    {n:'Dm',a:4,t:{4:[[0,0]],3:[[2,7]],2:[[3,0]],1:[[1,3]]}},
-  ]
-};
-
-function perm3(arr) {
-  const r=[];
-  for (let i=0;i<3;i++) for (let j=0;j<3;j++) for (let k=0;k<3;k++)
-    if (i!==j&&j!==k&&i!==k) r.push([arr[i],arr[j],arr[k]]);
-  return r;
-}
-function fretSpan(frets) {
-  const nz=frets.filter(f=>f>0);
-  if (nz.length<=1) return 0;
-  return Math.max(...nz)-Math.min(...nz);
-}
-function hasOpenString(frets) { return frets.some(f=>f===0); }
-
-function getVoicings(notes,root,strs,mxF=14,mxS=5) {
-  const vs=[],seen=new Set(),ps=perm3([0,1,2]);
-  for (const p of ps) {
-    const asgn=p.map(i=>notes[i]);
-    const opts=strs.map((s,idx)=>{
-      const o=OPEN[s],fs=[];
-      let f=((asgn[idx]-o)%12+12)%12;
-      while(f<=mxF){fs.push(f);f+=12;}
-      return fs;
-    });
-    for (const a of opts[0]) for (const b of opts[1]) for (const c of opts[2]) {
-      const fr=[a,b,c],span=fretSpan(fr);
-      if (span<=mxS&&Math.max(...fr)<=mxF) {
-        const k=fr.join(',');
-        if (!seen.has(k)) {
-          seen.add(k);
-          const noteIvs=notes.map(n=>((n-root+12)%12));
-          const loIv=((asgn[0]-root+12)%12);
-          let inv='Root in bass';
-          if (loIv===noteIvs[1]) inv='3rd in bass';
-          else if (loIv===noteIvs[2]) inv='5th in bass';
-          vs.push({frets:fr,notes:asgn,rootIdx:asgn.reduce((a,n,i)=>n===root?[...a,i]:a,[]),pos:fr.reduce((a,b)=>a+b,0)/3,inv,span});
-        }
-      }
-    }
-  }
-  return vs.sort((a,b)=>a.pos-b.pos);
-}
-
-function scoreVoicing(v,pf) {
-  return v.frets.reduce((s,f,j)=>s+Math.abs(f-pf[j]),0)+(v.span>3?(v.span-3)*8:0);
-}
-function closestVoicing(vs,pf) {
-  if (!vs.length) return null;
-  let best=null,bs=Infinity;
-  for (const v of vs){const s=scoreVoicing(v,pf);if(s<bs){bs=s;best=v;}}
-  return best;
-}
-function avgFretPos(f) {
-  const nz=f.filter(x=>x>0);
-  return nz.length?nz.reduce((a,b)=>a+b,0)/nz.length:0;
-}
-function rootStrLabel(v,strs) {
-  if (!v.rootIdx.length) return '';
-  return ', Root on '+strs[v.rootIdx[0]];
-}
-function voicingKey(v) { return v?v.frets.join(','):''; }
-
-function matchCAGED(root,quality,vN,vF,vS) {
-  const qk=['min','min7'].includes(quality)?'min':'maj';
-  const shapes=CAGED[qk];
-  if (!shapes) return null;
-  for (const shape of shapes) {
-    const ab=((root-OPEN[shape.a])%12+12)%12;
-    for (let o=0;o<=1;o++) {
-      const af=ab+o*12;
-      let ok=true;
-      for (let i=0;i<vS.length;i++) {
-        const s=vS[i],f=vF[i],iv=((vN[i]-root)%12+12)%12;
-        const st=shape.t[s];
-        if (!st){ok=false;break;}
-        if (!st.some(([off,sIv])=>{const ef=af+off;return(f===ef||f===ef+12||f===ef-12)&&sIv===iv;})){ok=false;break;}
-      }
-      if (ok) return {name:shape.n,anchorFret:af,shape};
-    }
-  }
-  return null;
-}
+import { useState, useMemo, useCallback, useEffect } from "react";
+import {
+  NOTES, OPEN, SNAME, SETS, SCALE, DEGS, QS, QKEYS, IV_LABEL,
+  getVoicings, closestVoicing, hasOpenString, rootStrLabel, voicingKey, matchCAGED,
+} from './music.js';
+import FretDiag from './FretDiag.jsx';
+import TriadFinder from './TriadFinder.jsx';
 
 function getShapeChordNotes(cr) {
   if (!cr) return [];
@@ -233,51 +115,6 @@ function OverlayDiagram({data,compact=false}) {
           </g>
         </svg>
       </div>
-    </div>
-  );
-}
-
-/* ---- Chord Diagram ---- */
-function FretDiag({voicing,strs,name,highlight,onClick,size="normal",setLabel,root}) {
-  if (!voicing) return (
-    <div className="flex flex-col items-center">
-      {name&&<div className="text-sm font-bold text-amber-400 mb-1">{name}</div>}
-      <div className="text-xs text-gray-500 italic p-4">No voicing</div>
-    </div>
-  );
-  const {frets,notes,rootIdx}=voicing;
-  const maxF=Math.max(...frets),minNZ=Math.min(...frets.filter(f=>f>0),maxF);
-  let startF=maxF<=4?0:Math.max(0,minNZ-1),endF=Math.max(startF+4,maxF+1);
-  const nFrets=endF-startF,hasNut=startF===0;
-  const sm=size==="small";
-  const w=sm?102:128,h=sm?135:162;
-  const m=sm?{t:38,b:14,l:36,r:16}:{t:44,b:18,l:42,r:20};
-  const pw=w-m.l-m.r,ph=h-m.t-m.b,ss=pw/2,fs=ph/nFrets;
-  const dotR=sm?10:12,fSize=sm?8:9;
-  const border=highlight?'ring-2 ring-amber-500 ring-offset-2 ring-offset-gray-950':'';
-  const cursor=onClick?'cursor-pointer hover:opacity-80':'';
-  return (
-    <div className={`flex flex-col items-center ${cursor}`} onClick={onClick}>
-      {name&&<div className={`font-bold text-amber-400 mb-1 text-center leading-tight ${sm?'text-xs':'text-sm'}`}>{name}</div>}
-      {setLabel&&<div className="text-xs text-emerald-400 mb-0.5">{setLabel}</div>}
-      <div className={`rounded-lg mt-1.5 transition-all ${highlight?'bg-amber-500/10 p-3':'p-0'} ${border}`}>
-        <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
-          {hasNut?<line x1={m.l-2} y1={m.t} x2={m.l+pw+2} y2={m.t} stroke="#e5e7eb" strokeWidth={3}/>:<text x={m.l-24} y={m.t+fs/2+4} fontSize="9" fill="#9ca3af" textAnchor="middle">{minNZ}fr</text>}
-          {Array.from({length:nFrets+1},(_,i)=>(<line key={i} x1={m.l} y1={m.t+i*fs} x2={m.l+pw} y2={m.t+i*fs} stroke={i===0&&hasNut?"#e5e7eb":"#4b5563"} strokeWidth={i===0&&hasNut?3:1}/>))}
-          {[0,1,2].map(i=>(<line key={i} x1={m.l+i*ss} y1={m.t} x2={m.l+i*ss} y2={m.t+nFrets*fs} stroke="#6b7280" strokeWidth={1.2}/>))}
-          {strs.map((s,i)=>(<text key={s} x={m.l+i*ss} y={m.t-22} fontSize={sm?"9":"11"} fill="#9ca3af" textAnchor="middle" fontFamily="monospace">{SNAME[s]}</text>))}
-          {frets.map((f,i)=>{
-            const isRoot=rootIdx.includes(i);
-            const iv=root!==undefined?((notes[i]-root+12)%12):null;
-            const label=iv!==null?(IV_LABEL[iv]||iv):NOTES[notes[i]];
-            const col=isRoot?"#f59e0b":"#3b82f6",strk=isRoot?"#fbbf24":"#60a5fa",tc=isRoot?"#000":"#fff";
-            if (f===0){const cx=m.l+i*ss,cy=hasNut?m.t-5:m.t-8;return <g key={i}><circle cx={cx} cy={cy} r={dotR*0.75} fill={col} stroke={strk} strokeWidth={1.5}/><text x={cx} y={cy+0.5} fontSize={fSize} fill={tc} textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{label}</text></g>;}
-            const x=m.l+i*ss,y=m.t+(f-startF-0.5)*fs;
-            return <g key={i}><circle cx={x} cy={y} r={dotR} fill={col} stroke={strk} strokeWidth={1.5}/><text x={x} y={y+0.5} fontSize={fSize} fill={tc} textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{label}</text></g>;
-          })}
-        </svg>
-      </div>
-      <div className="text-xs text-gray-500 mt-2.5">({notes.map((n,j)=>{const nn=NOTES[n];return rootIdx.includes(j)?<strong key={j} className="text-gray-300">{nn}</strong>:nn;}).reduce((acc,el,j)=>j===0?[el]:[...acc,'-',el],[])}) Frets: {frets.join('-')}</div>
     </div>
   );
 }
@@ -425,8 +262,8 @@ function PrintPreview({chords,path,pathSets,distances,keyName,onClose}) {
   );
 }
 
-/* ---- Main App ---- */
-export default function App() {
+/* ---- Progression Page ---- */
+function ProgressionPage() {
   const [key,setKey]=useState(0);
   const [prog,setProg]=useState([]);
   const [selectedQuality,setSelectedQuality]=useState('maj');
@@ -519,10 +356,11 @@ export default function App() {
         <svg width="56" height="56" viewBox="0 0 56 56" className="flex-shrink-0">
           <ellipse cx="28" cy="14" rx="18" ry="5" fill="#78716c"/><rect x="17" y="4" width="22" height="11" rx="4" fill="#a8a29e"/><rect x="10" y="13" width="36" height="3" rx="1.5" fill="#78716c"/><circle cx="28" cy="24" r="9" fill="#fde68a"/><circle cx="25" cy="22" r="1.2" fill="#1c1917"/><circle cx="31" cy="22" r="1.2" fill="#1c1917"/><path d="M24 26 Q28 29 32 26" stroke="#1c1917" strokeWidth="0.8" fill="none"/><path d="M20 26 Q22 36 28 38 Q34 36 36 26" fill="#d1d5db" stroke="#9ca3af" strokeWidth="0.5"/><path d="M22 27 Q24 34 28 36 Q32 34 34 27" fill="#e5e7eb"/><rect x="20" y="33" width="16" height="18" rx="3" fill="#3b82f6"/><rect x="22" y="33" width="12" height="10" rx="2" fill="#60a5fa"/><line x1="23" y1="33" x2="25" y2="39" stroke="#2563eb" strokeWidth="1.5"/><line x1="33" y1="33" x2="31" y2="39" stroke="#2563eb" strokeWidth="1.5"/><circle cx="25" cy="39" r="0.8" fill="#fbbf24"/><circle cx="31" cy="39" r="0.8" fill="#fbbf24"/><ellipse cx="42" cy="42" rx="7" ry="9" fill="#92400e" stroke="#78350f" strokeWidth="0.8"/><ellipse cx="42" cy="42" rx="4" ry="6" fill="#b45309"/><circle cx="42" cy="42" r="1.5" fill="#1c1917"/><rect x="41" y="28" width="2" height="15" rx="1" fill="#78350f"/><rect x="39" y="27" width="6" height="3" rx="1" fill="#92400e"/><path d="M35 38 Q38 40 40 42" stroke="#fde68a" strokeWidth="3" fill="none" strokeLinecap="round"/>
         </svg>
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-bold text-amber-400">Mr. Triad</h1>
           <p className="text-sm text-gray-400">Choose a key and add your chords, then find the smoothest path through your progression.</p>
         </div>
+        <a href="#/triadfinder" className="px-3 py-1.5 rounded-md text-xs font-medium bg-emerald-700 text-emerald-100 border border-emerald-600 hover:bg-emerald-500 hover:text-white hover:border-emerald-400 transition-all whitespace-nowrap">Triad Finder →</a>
       </div>
 
       <div className="mb-4 mt-4">
@@ -663,4 +501,21 @@ export default function App() {
     </div>
     </div>
   );
+}
+
+/* ---- Router ---- */
+function useHashRoute() {
+  const [route,setRoute]=useState(window.location.hash);
+  useEffect(()=>{
+    const onHash=()=>setRoute(window.location.hash);
+    window.addEventListener('hashchange',onHash);
+    return ()=>window.removeEventListener('hashchange',onHash);
+  },[]);
+  return route;
+}
+
+export default function App() {
+  const route=useHashRoute();
+  if (route.startsWith('#/triadfinder')) return <TriadFinder/>;
+  return <ProgressionPage/>;
 }
