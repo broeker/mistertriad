@@ -61,13 +61,18 @@ function startNote(midi, when, gain, inst='guitar') {
 }
 
 // Schedule one strum at an absolute AudioContext time. Notes must be preloaded.
-// Down = low-to-high, full voicing; up = top three notes, high-to-low, lighter.
+// span: 'full' (all strings), 'top' (upper strings — the "chick"), or 'bass'
+// (single lowest note — the "boom"). Up strums play high-to-low.
 // Re-striking a string damps what it was playing — that (plus a tight, slightly
 // uneven stagger and a velocity taper across strings) is what separates a
 // strummed guitar from an autoharp wash.
-export function scheduleStrum(midis, when, { dir='down', gain=1 } = {}) {
+export function scheduleStrum(midis, when, { dir='down', gain=1, span } = {}) {
   const n = midis.length;
-  const slots = dir==='down' ? midis.map((_,i)=>i) : midis.map((_,i)=>i).slice(-3).reverse();
+  const sp = span || (dir==='up' ? 'top' : 'full');
+  let slots = midis.map((_,i)=>i);
+  if (sp==='bass') slots=[0];
+  else if (sp==='top') slots=slots.slice(-(dir==='down'?4:3));
+  if (dir==='up') slots=[...slots].reverse();
   const stagger = dir==='down' ? 0.014 : 0.011;
   let t = when;
   for (const slot of slots) {
@@ -158,6 +163,8 @@ export function scheduleDrum(kind, when, gain=1) {
     thump(when, 220, 170, 0.09, gain*0.2);
   } else if (kind==='hat') {
     noiseBurst(when, 0.045, 7000, 'highpass', gain*0.1);
+  } else if (kind==='brush') {
+    noiseBurst(when, 0.07, 3000, 'bandpass', gain*0.18);
   }
 }
 
