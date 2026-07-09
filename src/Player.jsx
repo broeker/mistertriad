@@ -6,13 +6,38 @@ import {
 import FretDiag, { GripDiag } from './FretDiag.jsx';
 import { ensureCtx, ctxTime, preload, scheduleStrum, scheduleBass, scheduleDrum, scheduleLead, stopAll, voicingMidis, STRING_MIDI } from './audio.js';
 
-const PRESETS = [
-  { name:'12-Bar Blues', feel:'shuffle', bars:[[0,'7'],[0,'7'],[0,'7'],[0,'7'],[3,'7'],[3,'7'],[0,'7'],[0,'7'],[4,'7'],[3,'7'],[0,'7'],[4,'7']] },
-  { name:'Pop (I–V–vi–IV)', bars:[[0,'maj'],[4,'maj'],[5,'min'],[3,'maj'],[0,'maj'],[4,'maj'],[5,'min'],[3,'maj']] },
-  { name:'50s (I–vi–IV–V)', bars:[[0,'maj'],[5,'min'],[3,'maj'],[4,'maj'],[0,'maj'],[5,'min'],[3,'maj'],[4,'maj']] },
-  { name:'Folk (I–IV–I–V)', bars:[[0,'maj'],[3,'maj'],[0,'maj'],[4,'maj'],[0,'maj'],[3,'maj'],[4,'maj'],[0,'maj']] },
-];
-const toBars = preset => preset.bars.map(([deg,q])=>({deg,q}));
+// Iconic progressions per genre ([degree, quality]; quality defaults to maj).
+// Some appear under several genres — that's how music works.
+const PROGRESSIONS = {
+  blues: [
+    { name:'12-Bar Blues', bars:[[0,'7'],[0,'7'],[0,'7'],[0,'7'],[3,'7'],[3,'7'],[0,'7'],[0,'7'],[4,'7'],[3,'7'],[0,'7'],[4,'7']] },
+    { name:'Quick-Change 12-Bar', bars:[[0,'7'],[3,'7'],[0,'7'],[0,'7'],[3,'7'],[3,'7'],[0,'7'],[0,'7'],[4,'7'],[3,'7'],[0,'7'],[4,'7']] },
+    { name:'8-Bar Blues (Highway)', bars:[[0,'7'],[4,'7'],[3,'7'],[3,'7'],[0,'7'],[4,'7'],[0,'7'],[4,'7']] },
+    { name:'Minor Blues', bars:[[0,'min7'],[0,'min7'],[0,'min7'],[0,'min7'],[3,'min7'],[3,'min7'],[0,'min7'],[0,'min7'],[4,'7'],[3,'min7'],[0,'min7'],[4,'7']] },
+  ],
+  oldtime: [
+    { name:'Cabbage (I–IV–I–V)', bars:[[0],[3],[0],[4],[0],[3],[4],[0]] },
+    { name:'Circle (I–IV / I–V)', bars:[[0],[0],[3],[0],[0],[0],[4],[0]] },
+    { name:'Two-Chord (I–V)', bars:[[0],[0],[4],[4],[0],[0],[4],[0]] },
+  ],
+  bluegrass: [
+    { name:'I–IV–I–V', bars:[[0],[3],[0],[4],[0],[3],[4],[0]] },
+    { name:'Salty Dog (I–VI7–II7–V7)', bars:[[0],[5,'7'],[1,'7'],[4,'7'],[0],[5,'7'],[1,'7'],[4,'7']] },
+    { name:'Two-Chord Breakdown (I–V)', bars:[[0],[0],[4],[4],[0],[0],[4],[0]] },
+  ],
+  altcountry: [
+    { name:'I–V–vi–IV', bars:[[0],[4],[5,'min'],[3],[0],[4],[5,'min'],[3]] },
+    { name:'vi–IV–I–V', bars:[[5,'min'],[3],[0],[4],[5,'min'],[3],[0],[4]] },
+    { name:'50s (I–vi–IV–V)', bars:[[0],[5,'min'],[3],[4],[0],[5,'min'],[3],[4]] },
+    { name:'Jangle (I–IV)', bars:[[0],[0],[3],[3],[0],[0],[3],[3]] },
+  ],
+  lofi: [
+    { name:'ii7–V7–Imaj7', bars:[[1,'min7'],[4,'7'],[0,'maj7'],[0,'maj7'],[1,'min7'],[4,'7'],[0,'maj7'],[0,'maj7']] },
+    { name:'Imaj7–vi7–ii7–V7', bars:[[0,'maj7'],[5,'min7'],[1,'min7'],[4,'7'],[0,'maj7'],[5,'min7'],[1,'min7'],[4,'7']] },
+    { name:'iii7–vi7–ii7–V7', bars:[[2,'min7'],[5,'min7'],[1,'min7'],[4,'7'],[2,'min7'],[5,'min7'],[1,'min7'],[4,'7']] },
+  ],
+};
+const toBars = barDefs => barDefs.map(([deg,q='maj'])=>({deg,q}));
 
 // Strum patterns (b = beat offset within a 4/4 bar; span: full/top/bass).
 const STRUMS = {
@@ -67,20 +92,22 @@ function chordOf(bar,key) {
   return { root, quality:bar.q, name:NOTES[root]+QS[bar.q].s, numeral:DEGS[bar.deg].n+(bar.q==='7'?'7':'') };
 }
 
+const DEFAULT_GENRE=GENRES.find(g=>g.key==='blues');
+
 export default function Player() {
   const [key,setKey]=useState(9); // A
-  const [bars,setBars]=useState(()=>toBars(PRESETS[0]));
-  const [tempo,setTempo]=useState(90);
+  const [bars,setBars]=useState(()=>toBars(PROGRESSIONS.blues[0].bars));
+  const [tempo,setTempo]=useState(DEFAULT_GENRE.tempo);
   const [view,setView]=useState('cowboy');
   const [setKeySel,setSetKeySel]=useState('321');
   const [loop,setLoop]=useState(true);
-  const [feel,setFeel]=useState('shuffle'); // straight | shuffle; default matches the blues preset
+  const [feel,setFeel]=useState(DEFAULT_GENRE.feel);
   const [sound,setSound]=useState('cowboy'); // guitar channel: cowboy | triads | off
-  const [strum,setStrum]=useState('folk');
-  const [drums,setDrums]=useState('off');   // off | stomp | kit | train
-  const [bassMode,setBassMode]=useState('off'); // off | root | root5 | walk | boogie
-  const [lead,setLead]=useState('off');     // off | fills | solo
-  const [genre,setGenre]=useState(null);
+  const [strum,setStrum]=useState(DEFAULT_GENRE.strum);
+  const [drums,setDrums]=useState(DEFAULT_GENRE.drums);   // off | stomp | kit | train
+  const [bassMode,setBassMode]=useState(DEFAULT_GENRE.bass); // off | root | root5 | walk | boogie
+  const [lead,setLead]=useState(DEFAULT_GENRE.lead);     // off | fills | solo
+  const [genre,setGenre]=useState(DEFAULT_GENRE.key);
   const [playing,setPlaying]=useState(false);
   const [currentBar,setCurrentBar]=useState(null);
   const [editIdx,setEditIdx]=useState(null);
@@ -240,7 +267,7 @@ export default function Player() {
     });
   };
 
-  const applyPreset=p=>{ setBars(toBars(p)); setFeel(p.feel||'straight'); setEditIdx(null); };
+  const applyProgression=p=>{ setBars(toBars(p.bars)); setEditIdx(null); };
   const setBar=(i,patch)=>setBars(bs=>bs.map((b,j)=>j===i?{...b,...patch}:b));
   const removeBar=i=>{ setBars(bs=>bs.filter((_,j)=>j!==i)); setEditIdx(null); };
   const insertBar=i=>{ setBars(bs=>[...bs.slice(0,i+1),{...bs[i]},...bs.slice(i+1)]); setEditIdx(i+1); };
@@ -249,7 +276,7 @@ export default function Player() {
   const save=()=>{
     const name=saveName.trim();
     if (!name) return;
-    const entry={name,key,tempo,bars,feel,strum,drums,bassMode,lead};
+    const entry={name,key,tempo,bars,feel,strum,drums,bassMode,lead,genre};
     const next=[...saved.filter(s=>s.name!==name),entry];
     setSaved(next);
     localStorage.setItem(STORE_KEY,JSON.stringify(next));
@@ -257,6 +284,7 @@ export default function Player() {
   const loadEntry=s=>{
     setKey(s.key); setTempo(s.tempo); setBars(s.bars); setFeel(s.feel||'straight');
     setStrum(s.strum&&STRUMS[s.strum]?s.strum:'folk'); setDrums(s.drums||'off'); setBassMode(s.bassMode||'off'); setLead(s.lead||'off');
+    setGenre(s.genre&&PROGRESSIONS[s.genre]?s.genre:DEFAULT_GENRE.key);
     setSaveName(s.name); setEditIdx(null);
   };
   const deleteEntry=name=>{
@@ -290,15 +318,15 @@ export default function Player() {
 
       <div className="mb-4 flex flex-wrap gap-x-8 gap-y-3">
         <div>
-          <label className="text-xs text-gray-400 uppercase tracking-wide mb-2 block">Progression</label>
-          <div className="flex flex-wrap gap-1.5">
-            {PRESETS.map(p=>(<button key={p.name} onClick={()=>applyPreset(p)} className="px-3 py-1.5 rounded text-sm font-medium bg-gray-800 text-gray-300 hover:bg-gray-700 transition-all">{p.name}</button>))}
-          </div>
-        </div>
-        <div>
           <label className="text-xs text-gray-400 uppercase tracking-wide mb-2 block">Genre <span className="normal-case text-gray-600">(sets tempo, feel, strum &amp; band)</span></label>
           <div className="flex flex-wrap gap-1.5">
             {GENRES.map(g=>(<button key={g.key} onClick={()=>applyGenre(g)} className={`px-3 py-1.5 rounded text-sm font-medium transition-all ${genre===g.key?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{g.label}</button>))}
+          </div>
+        </div>
+        <div>
+          <label className="text-xs text-gray-400 uppercase tracking-wide mb-2 block">Iconic Progressions <span className="normal-case text-gray-600">({GENRES.find(g=>g.key===genre)?.label})</span></label>
+          <div className="flex flex-wrap gap-1.5">
+            {(PROGRESSIONS[genre]||[]).map(p=>(<button key={p.name} onClick={()=>applyProgression(p)} className="px-3 py-1.5 rounded text-sm font-medium bg-gray-800 text-gray-300 hover:bg-gray-700 transition-all">{p.name}</button>))}
           </div>
         </div>
         <div>
@@ -424,7 +452,7 @@ export default function Player() {
       </div>
 
       <div className="mt-6 text-xs text-gray-600 border-t border-gray-800 pt-4">
-        <p><strong className="text-gray-500">How to use:</strong> Pick a key and a preset (or click any bar to edit its chord, and + to add bars). Cowboy chords shows the simplest first-position grip for each bar; Triads shows a voice-led triad path on your chosen string set — the same voicing logic as the Progressions page. The <strong>View</strong> and the <strong>Guitar</strong> sound are independent, and you can switch views while it plays: watch the triads while the guitar strums cowboy chords to follow along, set Guitar to Triads to hear what the triads should sound like, or mute it and play the triads yourself over the rhythm section. A <strong>Genre</strong> button sets tempo, feel, strum pattern, and the band in one tap — every knob stays individually adjustable after. Strums: Folk is D-DU-UDU; Boom-chick picks the bass note on 1 and 3 and strums the top strings on 2 and 4 (old-time rhythm guitar); Bluegrass adds upstroke fills to the boom-chick; Lo-fi is sparse and lazy. Drums: Stomp (foot-tap), Kit (kick/snare/hats), Train (brushes with a backbeat). Bass is an upright: Root, Root–5th, Walking (with chromatic approaches), or Boogie (the swung R-3-5-6 shuffle line). Shuffle swings the offbeat strums and hats onto the triplet grid (the blues preset selects it automatically). Lead improvises pentatonic notes drawn from each bar's triad position on the selected string set — Fills plays a run into every 4th bar, Solo noodles throughout; each press of Play writes a new solo, and it loops as played. Saved progressions live in your browser.</p>
+        <p><strong className="text-gray-500">How to use:</strong> Pick a genre, then one of its iconic progressions — or click any bar to edit its chord, and + to add bars. Switching genre changes the sound and the progression list but leaves your bars alone. Cowboy chords shows the simplest first-position grip for each bar; Triads shows a voice-led triad path on your chosen string set — the same voicing logic as the Progressions page. The <strong>View</strong> and the <strong>Guitar</strong> sound are independent, and you can switch views while it plays: watch the triads while the guitar strums cowboy chords to follow along, set Guitar to Triads to hear what the triads should sound like, or mute it and play the triads yourself over the rhythm section. A <strong>Genre</strong> button sets tempo, feel, strum pattern, and the band in one tap — every knob stays individually adjustable after. Strums: Folk is D-DU-UDU; Boom-chick picks the bass note on 1 and 3 and strums the top strings on 2 and 4 (old-time rhythm guitar); Bluegrass adds upstroke fills to the boom-chick; Lo-fi is sparse and lazy. Drums: Stomp (foot-tap), Kit (kick/snare/hats), Train (brushes with a backbeat). Bass is an upright: Root, Root–5th, Walking (with chromatic approaches), or Boogie (the swung R-3-5-6 shuffle line). Shuffle swings the offbeat strums and hats onto the triplet grid (the blues preset selects it automatically). Lead improvises pentatonic notes drawn from each bar's triad position on the selected string set — Fills plays a run into every 4th bar, Solo noodles throughout; each press of Play writes a new solo, and it loops as played. Saved progressions live in your browser.</p>
       </div>
     </div>
     </div>
