@@ -1,5 +1,37 @@
 import { NOTES, SNAME, IV_LABEL } from './music.js';
 
+/* ---- Full-chord Reference Diagram (6 strings, muted strings marked x) ---- */
+export function GripDiag({grip}) {
+  if (!grip) return null;
+  const cols=[6,5,4,3,2,1].map(s=>({s,d:grip.frets[s]||null}));
+  const played=cols.filter(c=>c.d).map(c=>c.d.fret);
+  const maxF=Math.max(...played),nz=played.filter(f=>f>0);
+  const minNZ=nz.length?Math.min(...nz):0;
+  const startF=maxF<=4?0:Math.max(0,minNZ-1),endF=Math.max(startF+4,maxF+1);
+  const nFrets=endF-startF,hasNut=startF===0;
+  const w=168,h=158,m={t:40,b:14,l:30,r:14};
+  const pw=w-m.l-m.r,ph=h-m.t-m.b,ss=pw/5,fs=ph/nFrets;
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+      {hasNut?<line x1={m.l-2} y1={m.t} x2={m.l+pw+2} y2={m.t} stroke="#e5e7eb" strokeWidth={3}/>:<text x={m.l-18} y={m.t+fs/2+3} fontSize="8" fill="#9ca3af" textAnchor="middle">{minNZ}fr</text>}
+      {Array.from({length:nFrets+1},(_,i)=>(<line key={i} x1={m.l} y1={m.t+i*fs} x2={m.l+pw} y2={m.t+i*fs} stroke={i===0&&hasNut?"#e5e7eb":"#4b5563"} strokeWidth={i===0&&hasNut?3:1}/>))}
+      {cols.map((c,i)=>(<line key={c.s} x1={m.l+i*ss} y1={m.t} x2={m.l+i*ss} y2={m.t+nFrets*fs} stroke="#6b7280" strokeWidth={c.s>=4?1.2:0.9}/>))}
+      {cols.map((c,i)=>(<text key={c.s} x={m.l+i*ss} y={m.t-24} fontSize="8" fill="#9ca3af" textAnchor="middle" fontFamily="monospace">{SNAME[c.s]}</text>))}
+      {cols.map((c,i)=>{
+        const x=m.l+i*ss;
+        if (!c.d) return <text key={c.s} x={x} y={m.t-8} fontSize="9" fill="#6b7280" textAnchor="middle" fontWeight="bold">×</text>;
+        const {fret,interval}=c.d;
+        const isRoot=interval===0;
+        const col=isRoot?"#f59e0b":"#3b82f6",strk=isRoot?"#fbbf24":"#60a5fa",tc=isRoot?"#000":"#fff";
+        const label=IV_LABEL[interval]||interval;
+        if (fret===0){const cy=hasNut?m.t-9:m.t-10;return <g key={c.s}><circle cx={x} cy={cy} r={6.5} fill={col} stroke={strk} strokeWidth={1.2}/><text x={x} y={cy+0.5} fontSize="6.5" fill={tc} textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{label}</text></g>;}
+        const y=m.t+(fret-startF-0.5)*fs;
+        return <g key={c.s}><circle cx={x} cy={y} r={8} fill={col} stroke={strk} strokeWidth={1.2}/><text x={x} y={y+0.5} fontSize="7" fill={tc} textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{label}</text></g>;
+      })}
+    </svg>
+  );
+}
+
 /* ---- Chord Diagram ---- */
 export default function FretDiag({voicing,strs,name,highlight,onClick,size="normal",setLabel,root}) {
   if (!voicing) return (

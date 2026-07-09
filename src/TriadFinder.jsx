@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
-import { NOTES, QS, QKEYS, IV_LABEL, STRING_SETS, getVoicings, matchCAGED, matchCAGEDZone } from './music.js';
-import FretDiag from './FretDiag.jsx';
+import { NOTES, QS, QKEYS, IV_LABEL, STRING_SETS, getVoicings, matchCAGED, matchCAGEDZone, firstPositionGrip } from './music.js';
+import FretDiag, { GripDiag } from './FretDiag.jsx';
 
 const TRUE_TRIADS = ['maj','min','dim','aug'];
 
@@ -100,6 +100,36 @@ export default function TriadFinder() {
 
   const chordName=NOTES[root]+QS[quality].s;
   const isShell=['7','maj7','min7'].includes(quality);
+  const refGrip=useMemo(()=>firstPositionGrip(root,quality),[root,quality]);
+
+  // Same notes reinterpreted from a different root: rootless upper structures
+  // of 7th chords, and symmetric/enharmonic equivalents.
+  const alsoAs=useMemo(()=>{
+    const n=i=>NOTES[((i%12)+12)%12];
+    const spelled=QS[quality].iv.map(iv=>NOTES[(root+iv)%12]).join(' ');
+    switch(quality){
+      case 'maj': return [
+        {label:`${n(root-3)}m7`,ctx:`over ${n(root-3)}`,tip:`${spelled} = ♭3 5 ♭7 of ${n(root-3)}m7`},
+      ];
+      case 'min': return [
+        {label:`${n(root-4)}maj7`,ctx:`over ${n(root-4)}`,tip:`${spelled} = 3 5 7 of ${n(root-4)}maj7`},
+        {label:`${n(root-3)}m7♭5`,ctx:`over ${n(root-3)}`,tip:`${spelled} = ♭3 ♭5 ♭7 of ${n(root-3)}m7♭5`},
+      ];
+      case 'dim': return [
+        {label:`${n(root-4)}7`,ctx:`over ${n(root-4)}`,tip:`${spelled} = 3 5 ♭7 of ${n(root-4)}7`},
+      ];
+      case 'aug': return [
+        {label:`${n(root+4)}+ and ${n(root+8)}+`,ctx:'same notes',tip:'Augmented triads are symmetric — any of the three notes can be the root'},
+      ];
+      case 'sus2': return [
+        {label:`${n(root+7)}sus4`,ctx:'same notes',tip:`${spelled} rearranged`},
+      ];
+      case 'sus4': return [
+        {label:`${n(root+5)}sus2`,ctx:'same notes',tip:`${spelled} rearranged`},
+      ];
+      default: return [];
+    }
+  },[root,quality]);
 
   return (
     <div className="min-h-screen bg-black text-gray-100 font-sans">
@@ -146,6 +176,29 @@ export default function TriadFinder() {
           </div>
         </div>
       </div>
+
+      {(refGrip||alsoAs.length>0)&&(
+        <div className="mb-5 flex flex-wrap gap-3 items-stretch">
+          {refGrip&&(
+            <div className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 flex flex-col items-center">
+              <div className="text-xs font-bold text-gray-300">{chordName} <span className="text-gray-500 font-normal">— full chord, 1st position</span></div>
+              <GripDiag grip={refGrip}/>
+            </div>
+          )}
+          {alsoAs.length>0&&(
+            <div className="flex-1 min-w-[240px] text-xs text-gray-400 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2">
+              <strong className="text-gray-300">{chordName} also functions as:</strong>{' '}
+              {alsoAs.map((a,i)=>(
+                <span key={i} title={a.tip} className="cursor-help">
+                  {i>0&&<span className="text-gray-600"> · </span>}
+                  <span className="text-amber-300 font-medium">{a.label}</span> <span className="text-gray-500">({a.ctx})</span>
+                </span>
+              ))}
+              <span className="text-gray-600"> — hover for the interval spelling</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {activeSets.size===0&&(
         <div className="text-sm text-gray-500 italic py-8 text-center">Select at least one string set.</div>

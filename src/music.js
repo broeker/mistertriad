@@ -57,6 +57,68 @@ export const CAGED = {
   ]
 };
 
+// Reference grips: standard movable full-chord forms per quality, same template
+// format as CAGED. Used to show the "1st position" chord — the form whose grip
+// sits lowest on the neck for a given root. dim/aug have no standard full grip.
+export const REF_GRIPS = {
+  maj: CAGED.maj,
+  min: CAGED.min,
+  '7': [
+    {n:'E7',a:6,t:{6:[[0,0]],5:[[2,7]],4:[[0,10]],3:[[1,4]],2:[[0,7]],1:[[0,0]]}},
+    {n:'G7',a:6,t:{6:[[0,0]],5:[[-1,4]],4:[[-3,7]],3:[[-3,0]],2:[[-3,4]],1:[[-2,10]]}},
+    {n:'A7',a:5,t:{5:[[0,0]],4:[[2,7]],3:[[0,10]],2:[[2,4]],1:[[0,7]]}},
+    {n:'C7',a:5,t:{5:[[0,0]],4:[[-1,4]],3:[[0,10]],2:[[-2,0]],1:[[-3,4]]}},
+    {n:'D7',a:4,t:{4:[[0,0]],3:[[2,7]],2:[[1,10]],1:[[2,4]]}},
+  ],
+  maj7: [
+    {n:'Emaj7',a:6,t:{6:[[0,0]],4:[[1,11]],3:[[1,4]],2:[[0,7]]}},
+    {n:'Amaj7',a:5,t:{5:[[0,0]],4:[[2,7]],3:[[1,11]],2:[[2,4]],1:[[0,7]]}},
+    {n:'Cmaj7',a:5,t:{5:[[0,0]],4:[[-1,4]],3:[[-3,7]],2:[[-3,11]],1:[[-3,4]]}},
+    {n:'Dmaj7',a:4,t:{4:[[0,0]],3:[[2,7]],2:[[2,11]],1:[[2,4]]}},
+  ],
+  min7: [
+    {n:'Em7',a:6,t:{6:[[0,0]],5:[[2,7]],4:[[0,10]],3:[[0,3]],2:[[0,7]],1:[[0,0]]}},
+    {n:'Am7',a:5,t:{5:[[0,0]],4:[[2,7]],3:[[0,10]],2:[[1,3]],1:[[0,7]]}},
+    {n:'Dm7',a:4,t:{4:[[0,0]],3:[[2,7]],2:[[1,10]],1:[[1,3]]}},
+  ],
+  sus4: [
+    {n:'Esus4',a:6,t:{6:[[0,0]],5:[[2,7]],4:[[2,0]],3:[[2,5]],2:[[0,7]],1:[[0,0]]}},
+    {n:'Asus4',a:5,t:{5:[[0,0]],4:[[2,7]],3:[[2,0]],2:[[3,5]],1:[[0,7]]}},
+    {n:'Dsus4',a:4,t:{4:[[0,0]],3:[[2,7]],2:[[3,0]],1:[[3,5]]}},
+  ],
+  sus2: [
+    {n:'Asus2',a:5,t:{5:[[0,0]],4:[[2,7]],3:[[2,0]],2:[[0,2]],1:[[0,7]]}},
+    {n:'Dsus2',a:4,t:{4:[[0,0]],3:[[2,7]],2:[[3,0]],1:[[0,2]]}},
+  ],
+};
+
+// Lowest-on-the-neck full grip for a root+quality: the "1st position" chord.
+// Returns {name, frets: {string: {fret, interval}}, maxFret} or null.
+export function firstPositionGrip(root, quality) {
+  const shapes=REF_GRIPS[quality];
+  if (!shapes) return null;
+  let best=null,bs=Infinity;
+  for (const shape of shapes) {
+    const af=((root-OPEN[shape.a])%12+12)%12;
+    const offs=Object.values(shape.t).map(tones=>tones[0][0]);
+    const openForm=Math.min(...offs)<0;
+    const frets={};
+    for (const [s,tones] of Object.entries(shape.t)) {
+      const [off,iv]=tones[0];
+      frets[s]={fret:af+off,interval:iv};
+    }
+    const vals=Object.values(frets).map(f=>f.fret);
+    // Forms that reach below the anchor depend on open strings: only usable as the
+    // actual nut-position chord, never barred up the neck.
+    if (openForm&&(Math.min(...vals)!==0||Math.max(...vals)>3)) continue;
+    if (Math.min(...vals)<0) continue;
+    const mx=Math.max(...vals);
+    const score=mx*100+af;
+    if (score<bs){bs=score;best={name:shape.n,frets,maxFret:mx};}
+  }
+  return best;
+}
+
 function perm3(arr) {
   const r=[];
   for (let i=0;i<3;i++) for (let j=0;j<3;j++) for (let k=0;k<3;k++)
