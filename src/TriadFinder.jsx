@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { NOTES, QS, QKEYS, IV_LABEL, STRING_SETS, getVoicings, matchCAGED, matchCAGEDZone, firstPositionGrip } from './music.js';
 import FretDiag, { GripDiag } from './FretDiag.jsx';
+import { strum, voicingMidis, STRING_MIDI } from './audio.js';
 
 const TRUE_TRIADS = ['maj','min','dim','aug'];
 
@@ -31,7 +32,9 @@ function Card({item,root}) {
         <span className="text-xs text-emerald-400">{set.label}</span>
       </div>
       <div className="text-[11px] text-gray-400 mb-0.5">{bassLabel(v,root,item.quality)}</div>
-      <FretDiag voicing={v} strs={set.strs} name={null} root={root} size="small"/>
+      <div title="Click to play">
+        <FretDiag voicing={v} strs={set.strs} name={null} root={root} size="small" onClick={()=>strum(voicingMidis(set.strs,v.frets))}/>
+      </div>
     </div>
   );
 }
@@ -180,7 +183,8 @@ export default function TriadFinder() {
       {(refGrip||alsoAs.length>0)&&(
         <div className="mb-5 flex flex-wrap gap-3 items-stretch">
           {refGrip&&(
-            <div className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 flex flex-col items-center">
+            <div title="Click to play" className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 flex flex-col items-center cursor-pointer hover:border-gray-600 transition-colors"
+                 onClick={()=>strum([6,5,4,3,2,1].filter(s=>refGrip.frets[s]).map(s=>STRING_MIDI[s]+refGrip.frets[s].fret))}>
               <div className="text-xs font-bold text-gray-300">{chordName} <span className="text-gray-500 font-normal">— full chord, 1st position</span></div>
               <GripDiag grip={refGrip}/>
             </div>
@@ -215,7 +219,7 @@ export default function TriadFinder() {
 
       <div className="mt-6 text-xs text-gray-600 border-t border-gray-800 pt-4">
         <p>
-          <strong className="text-gray-500">Notes:</strong> Positions are shown up to the 14th fret, low to high. Voicings needing more than a 3-fret span are omitted, and open strings only appear in first-position shapes (frets 1–3).
+          <strong className="text-gray-500">Notes:</strong> Click any diagram to hear it. Positions are shown up to the 14th fret, low to high. Voicings needing more than a 3-fret span are omitted, and open strings only appear in first-position shapes (frets 1–3).
           A solid shape badge means the voicing sits exactly inside that CAGED grip; a <span className="text-gray-500">≈</span> badge means it falls in that shape's region of the neck but isn't a literal subset of the grip.
           {isShell&&' 7th chord voicings are shells (root, 3rd, 7th) — the 5th is omitted to fit 3 strings.'}
         </p>

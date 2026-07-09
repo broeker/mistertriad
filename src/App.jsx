@@ -5,6 +5,7 @@ import {
 } from './music.js';
 import FretDiag from './FretDiag.jsx';
 import TriadFinder from './TriadFinder.jsx';
+import { strum, voicingMidis } from './audio.js';
 
 function getShapeChordNotes(cr) {
   if (!cr) return [];
@@ -423,6 +424,9 @@ function ProgressionPage() {
                       <div className="flex flex-col items-center gap-1 mt-1.5">
                         {altVoicings[i]?.length>0&&(
                           <button onClick={()=>setShowAltIdx(showAltIdx===i?null:i)} className={`px-3 py-1 rounded-md text-xs font-medium transition-all duration-200 w-full ${showAltIdx===i?'bg-emerald-600 text-white border border-emerald-500 shadow-lg shadow-emerald-500/30':isOverridden?'bg-amber-500 text-gray-900 border border-amber-400 hover:bg-amber-400':'bg-emerald-700 text-emerald-100 hover:bg-emerald-500 hover:text-white border border-emerald-600 hover:border-emerald-400'}`}>Alt voicing</button>
+                        )}
+                        {path[i]&&(
+                          <button onClick={()=>strum(voicingMidis(SETS[currSet].strs,path[i].frets))} className="px-3 py-1 rounded-md text-xs font-medium bg-gray-800 text-gray-300 border border-gray-700 hover:bg-amber-500 hover:text-gray-900 hover:border-amber-400 transition-all duration-200 w-full">▶ Play</button>
                         )}
                         {path[i]&&(
                           <button onClick={()=>setOverlayIdx(overlayIdx===i?null:i)} className={`px-3 py-1 rounded-md text-xs font-medium transition-all duration-200 w-full ${overlayIdx===i?'bg-emerald-600 text-white border border-emerald-500 shadow-lg shadow-emerald-500/30':'bg-emerald-700 text-emerald-100 hover:bg-emerald-500 hover:text-white border border-emerald-600 hover:border-emerald-400 hover:shadow-lg hover:shadow-emerald-500/30 hover:scale-105'}`}>Overlay</button>
