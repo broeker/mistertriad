@@ -22,19 +22,20 @@ function getCtx() {
 export function ensureCtx() { getCtx(); }
 export function ctxTime() { return getCtx().currentTime; }
 
-function load(midi) {
-  if (!loading.has(midi)) {
-    loading.set(midi, fetch(`${import.meta.env.BASE_URL}samples/guitar/${noteName(midi)}.mp3`)
-      .then(r => { if (!r.ok) throw new Error(`sample ${noteName(midi)}`); return r.arrayBuffer(); })
+function load(midi, inst='guitar') {
+  const key = inst+':'+midi;
+  if (!loading.has(key)) {
+    loading.set(key, fetch(`${import.meta.env.BASE_URL}samples/${inst}/${noteName(midi)}.mp3`)
+      .then(r => { if (!r.ok) throw new Error(`sample ${inst} ${noteName(midi)}`); return r.arrayBuffer(); })
       .then(ab => getCtx().decodeAudioData(ab))
-      .then(buf => { decoded.set(midi, buf); return buf; }));
+      .then(buf => { decoded.set(key, buf); return buf; }));
   }
-  return loading.get(midi);
+  return loading.get(key);
 }
 
 // Resolve when every needed sample is decoded (failed loads resolve to null).
-export function preload(midis) {
-  return Promise.all([...new Set(midis)].map(m => load(m).catch(() => null)));
+export function preload(midis, inst='guitar') {
+  return Promise.all([...new Set(midis)].map(m => load(m, inst).catch(() => null)));
 }
 
 // MIDI notes for a voicing; strs and frets are index-aligned, low string first.
@@ -42,8 +43,8 @@ export function voicingMidis(strs, frets) {
   return strs.map((s,i) => STRING_MIDI[s] + frets[i]);
 }
 
-function startNote(midi, when, gain) {
-  const buf = decoded.get(midi);
+function startNote(midi, when, gain, inst='guitar') {
+  const buf = decoded.get(inst+':'+midi);
   if (!buf) return null;
   const c = getCtx();
   const src = c.createBufferSource();
@@ -79,6 +80,74 @@ export function scheduleStrum(midis, when, { dir='down', gain=1 } = {}) {
     const entry = startNote(midis[slot], t, gain*taper*(0.9+Math.random()*0.2));
     if (entry) slotLast.set(slot, { ...entry, t });
     t += stagger*(0.8+Math.random()*0.4);
+  }
+}
+
+// Upright bass: monophonic — each note damps the previous one.
+export function scheduleBass(midi, when, gain=0.9) {
+  const prev = slotLast.get('bass');
+  if (prev) {
+    try { prev.g.gain.setTargetAtTime(0, Math.max(prev.t, when-0.015), 0.03); } catch { /* ended */ }
+  }
+  const entry = startNote(midi, when, gain, 'bass');
+  if (entry) slotLast.set('bass', { ...entry, t: when });
+}
+
+/* Synthesized drums: kick, snare, hat, and a duller foot-stomp thud. */
+let noiseBuf = null;
+function getNoise() {
+  if (!noiseBuf) {
+    const c = getCtx();
+    noiseBuf = c.createBuffer(1, c.sampleRate, c.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i=0;i<d.length;i++) d[i] = Math.random()*2-1;
+  }
+  return noiseBuf;
+}
+
+function noiseBurst(when, dur, freq, type, gain) {
+  const c = getCtx();
+  const src = c.createBufferSource();
+  src.buffer = getNoise();
+  const f = c.createBiquadFilter();
+  f.type = type;
+  f.frequency.value = freq;
+  const g = c.createGain();
+  g.gain.setValueAtTime(gain, when);
+  g.gain.exponentialRampToValueAtTime(0.001, when+dur);
+  src.connect(f); f.connect(g); g.connect(c.destination);
+  src.start(when); src.stop(when+dur+0.02);
+  const entry = { src, g };
+  active.add(entry);
+  src.onended = () => active.delete(entry);
+}
+
+function thump(when, f0, f1, dur, gain) {
+  const c = getCtx();
+  const o = c.createOscillator();
+  o.frequency.setValueAtTime(f0, when);
+  o.frequency.exponentialRampToValueAtTime(f1, when+0.08);
+  const g = c.createGain();
+  g.gain.setValueAtTime(gain, when);
+  g.gain.exponentialRampToValueAtTime(0.001, when+dur);
+  o.connect(g); g.connect(c.destination);
+  o.start(when); o.stop(when+dur+0.05);
+  const entry = { src: o, g };
+  active.add(entry);
+  o.onended = () => active.delete(entry);
+}
+
+export function scheduleDrum(kind, when, gain=1) {
+  if (kind==='stomp') {
+    thump(when, 95, 40, 0.16, gain*0.9);
+    noiseBurst(when, 0.05, 350, 'lowpass', gain*0.25);
+  } else if (kind==='kick') {
+    thump(when, 140, 45, 0.25, gain*0.8);
+  } else if (kind==='snare') {
+    noiseBurst(when, 0.13, 1600, 'highpass', gain*0.3);
+    thump(when, 220, 170, 0.09, gain*0.2);
+  } else if (kind==='hat') {
+    noiseBurst(when, 0.045, 7000, 'highpass', gain*0.1);
   }
 }
 

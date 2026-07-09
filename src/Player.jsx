@@ -4,7 +4,7 @@ import {
   getVoicings, closestVoicing, hasOpenString, firstPositionGrip,
 } from './music.js';
 import FretDiag, { GripDiag } from './FretDiag.jsx';
-import { ensureCtx, ctxTime, preload, scheduleStrum, stopAll, voicingMidis, STRING_MIDI } from './audio.js';
+import { ensureCtx, ctxTime, preload, scheduleStrum, scheduleBass, scheduleDrum, stopAll, voicingMidis, STRING_MIDI } from './audio.js';
 
 const PRESETS = [
   { name:'12-Bar Blues', bars:[[0,'7'],[0,'7'],[0,'7'],[0,'7'],[3,'7'],[3,'7'],[0,'7'],[0,'7'],[4,'7'],[3,'7'],[0,'7'],[4,'7']] },
@@ -39,6 +39,8 @@ export default function Player() {
   const [view,setView]=useState('cowboy');
   const [setKeySel,setSetKeySel]=useState('321');
   const [loop,setLoop]=useState(true);
+  const [drums,setDrums]=useState('off');   // off | stomp | kit
+  const [bassOn,setBassOn]=useState(false);
   const [playing,setPlaying]=useState(false);
   const [currentBar,setCurrentBar]=useState(null);
   const [editIdx,setEditIdx]=useState(null);
@@ -85,14 +87,36 @@ export default function Player() {
   },[]);
 
   useEffect(()=>stop,[stop]); // unmount
-  useEffect(()=>{ stop(); },[bars,key,view,setKeySel,tempo,stop]); // structural changes invalidate the schedule
+  useEffect(()=>{ stop(); },[bars,key,view,setKeySel,tempo,drums,bassOn,stop]); // structural changes invalidate the schedule
 
   const start=()=>{
     if (playing) { stop(); return; }
     ensureCtx();
     const spb=60/tempo, barDur=4*spb, loopDur=bars.length*barDur;
-    const events=bars.flatMap((_,i)=>PATTERN.map(p=>({t:i*barDur+p.b*spb,i,dir:p.dir,g:p.g})));
-    preload(barMidis.flat()).then(()=>{
+    const events=[];
+    const bassMidis=[];
+    bars.forEach((_,i)=>{
+      const base=i*barDur;
+      PATTERN.forEach(p=>events.push({t:base+p.b*spb,type:'strum',i,dir:p.dir,g:p.g}));
+      if (drums==='stomp') {
+        [0,2].forEach(b=>events.push({t:base+b*spb,type:'drum',kind:'stomp',g:b===0?1:0.8}));
+      } else if (drums==='kit') {
+        [0,2].forEach(b=>events.push({t:base+b*spb,type:'drum',kind:'kick',g:1}));
+        [1,3].forEach(b=>events.push({t:base+b*spb,type:'drum',kind:'snare',g:1}));
+        [0,0.5,1,1.5,2,2.5,3,3.5].forEach(b=>events.push({t:base+b*spb,type:'drum',kind:'hat',g:b%1?0.7:1}));
+      }
+      if (bassOn) {
+        const ch=chords[i];
+        const rootM=28+((ch.root-4+12)%12);          // E1..D#2
+        const fi=ch.quality==='dim'?6:7;
+        const fifthM=rootM-(12-fi)>=28?rootM-(12-fi):rootM+fi;
+        events.push({t:base,type:'bass',m:rootM,g:1});
+        events.push({t:base+2*spb,type:'bass',m:fifthM,g:0.85});
+        bassMidis.push(rootM,fifthM);
+      }
+    });
+    events.sort((a,b)=>a.t-b.t);
+    Promise.all([preload(barMidis.flat()),bassOn?preload(bassMidis,'bass'):Promise.resolve()]).then(()=>{
       const t0=ctxTime()+0.12;
       const st={t0,nextIdx:0,events,loopDur,barDur};
       st.timer=setInterval(()=>{
@@ -103,7 +127,9 @@ export default function Player() {
           const ev=st.events[st.nextIdx%st.events.length];
           const t=st.t0+loopN*st.loopDur+ev.t;
           if (t>now+0.25) break;
-          if (barMidis[ev.i].length) scheduleStrum(barMidis[ev.i],t,{dir:ev.dir,gain:ev.g});
+          if (ev.type==='strum') { if (barMidis[ev.i].length) scheduleStrum(barMidis[ev.i],t,{dir:ev.dir,gain:ev.g}); }
+          else if (ev.type==='drum') scheduleDrum(ev.kind,t,ev.g);
+          else if (ev.type==='bass') scheduleBass(ev.m,t,ev.g);
           st.nextIdx++;
         }
         const pos=now-st.t0;
@@ -196,6 +222,18 @@ export default function Player() {
         <label className="flex items-center gap-1.5 text-sm text-gray-400 cursor-pointer">
           <input type="checkbox" checked={loop} onChange={e=>setLoop(e.target.checked)} className="accent-amber-500"/> Loop
         </label>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-gray-500 uppercase tracking-wide">Drums</span>
+          {[['off','Off'],['stomp','Stomp'],['kit','Kit']].map(([k,l])=>(
+            <button key={k} onClick={()=>setDrums(k)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${drums===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{l}</button>
+          ))}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-gray-500 uppercase tracking-wide">Bass</span>
+          {[[false,'Off'],[true,'Root–5th']].map(([k,l])=>(
+            <button key={l} onClick={()=>setBassOn(k)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${bassOn===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{l}</button>
+          ))}
+        </div>
         <span className="text-xs text-gray-600">Strum: D · D U · U D U</span>
       </div>
 
@@ -256,7 +294,7 @@ export default function Player() {
       </div>
 
       <div className="mt-6 text-xs text-gray-600 border-t border-gray-800 pt-4">
-        <p><strong className="text-gray-500">How to use:</strong> Pick a key and a preset (or click any bar to edit its chord, and + to add bars). Cowboy chords shows the simplest first-position grip for each bar; Triads shows a voice-led triad path on your chosen string set — the same voicing logic as the Progressions page. Playback strums whichever view you're looking at. Saved progressions live in your browser.</p>
+        <p><strong className="text-gray-500">How to use:</strong> Pick a key and a preset (or click any bar to edit its chord, and + to add bars). Cowboy chords shows the simplest first-position grip for each bar; Triads shows a voice-led triad path on your chosen string set — the same voicing logic as the Progressions page. Playback strums whichever view you're looking at. Add a rhythm section if you like: Stomp is a foot-tap on 1 and 3, Kit is a basic kick/snare/hats groove, and Bass is an upright playing root–fifth. Saved progressions live in your browser.</p>
       </div>
     </div>
     </div>
