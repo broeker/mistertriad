@@ -7,7 +7,7 @@ import FretDiag, { GripDiag } from './FretDiag.jsx';
 import { ensureCtx, ctxTime, preload, scheduleStrum, scheduleBass, scheduleDrum, stopAll, voicingMidis, STRING_MIDI } from './audio.js';
 
 const PRESETS = [
-  { name:'12-Bar Blues', bars:[[0,'7'],[0,'7'],[0,'7'],[0,'7'],[3,'7'],[3,'7'],[0,'7'],[0,'7'],[4,'7'],[3,'7'],[0,'7'],[4,'7']] },
+  { name:'12-Bar Blues', feel:'shuffle', bars:[[0,'7'],[0,'7'],[0,'7'],[0,'7'],[3,'7'],[3,'7'],[0,'7'],[0,'7'],[4,'7'],[3,'7'],[0,'7'],[4,'7']] },
   { name:'Pop (I–V–vi–IV)', bars:[[0,'maj'],[4,'maj'],[5,'min'],[3,'maj'],[0,'maj'],[4,'maj'],[5,'min'],[3,'maj']] },
   { name:'50s (I–vi–IV–V)', bars:[[0,'maj'],[5,'min'],[3,'maj'],[4,'maj'],[0,'maj'],[5,'min'],[3,'maj'],[4,'maj']] },
   { name:'Folk (I–IV–I–V)', bars:[[0,'maj'],[3,'maj'],[0,'maj'],[4,'maj'],[0,'maj'],[3,'maj'],[4,'maj'],[0,'maj']] },
@@ -39,6 +39,7 @@ export default function Player() {
   const [view,setView]=useState('cowboy');
   const [setKeySel,setSetKeySel]=useState('321');
   const [loop,setLoop]=useState(true);
+  const [feel,setFeel]=useState('shuffle'); // straight | shuffle; default matches the blues preset
   const [sound,setSound]=useState('cowboy'); // guitar channel: cowboy | triads | off
   const [drums,setDrums]=useState('off');   // off | stomp | kit
   const [bassOn,setBassOn]=useState(false);
@@ -89,23 +90,25 @@ export default function Player() {
   },[]);
 
   useEffect(()=>stop,[stop]); // unmount
-  useEffect(()=>{ stop(); },[bars,key,setKeySel,tempo,sound,drums,bassOn,stop]); // structural changes invalidate the schedule
+  useEffect(()=>{ stop(); },[bars,key,setKeySel,tempo,sound,drums,bassOn,feel,stop]); // structural changes invalidate the schedule
 
   const start=()=>{
     if (playing) { stop(); return; }
     ensureCtx();
     const spb=60/tempo, barDur=4*spb, loopDur=bars.length*barDur;
+    // Shuffle: offbeat eighths land on the triplet 2/3 instead of halfway.
+    const sw=feel==='shuffle'?(b=>Math.floor(b)+(b%1?2/3:0)):(b=>b);
     const events=[];
     const bassMidis=[];
     bars.forEach((_,i)=>{
       const base=i*barDur;
-      PATTERN.forEach(p=>events.push({t:base+p.b*spb,type:'strum',i,dir:p.dir,g:p.g}));
+      PATTERN.forEach(p=>events.push({t:base+sw(p.b)*spb,type:'strum',i,dir:p.dir,g:p.g}));
       if (drums==='stomp') {
         [0,2].forEach(b=>events.push({t:base+b*spb,type:'drum',kind:'stomp',g:b===0?1:0.8}));
       } else if (drums==='kit') {
         [0,2].forEach(b=>events.push({t:base+b*spb,type:'drum',kind:'kick',g:1}));
         [1,3].forEach(b=>events.push({t:base+b*spb,type:'drum',kind:'snare',g:1}));
-        [0,0.5,1,1.5,2,2.5,3,3.5].forEach(b=>events.push({t:base+b*spb,type:'drum',kind:'hat',g:b%1?0.7:1}));
+        [0,0.5,1,1.5,2,2.5,3,3.5].forEach(b=>events.push({t:base+sw(b)*spb,type:'drum',kind:'hat',g:b%1?0.7:1}));
       }
       if (bassOn) {
         const ch=chords[i];
@@ -145,7 +148,7 @@ export default function Player() {
     });
   };
 
-  const applyPreset=p=>{ setBars(toBars(p)); setEditIdx(null); };
+  const applyPreset=p=>{ setBars(toBars(p)); setFeel(p.feel||'straight'); setEditIdx(null); };
   const setBar=(i,patch)=>setBars(bs=>bs.map((b,j)=>j===i?{...b,...patch}:b));
   const removeBar=i=>{ setBars(bs=>bs.filter((_,j)=>j!==i)); setEditIdx(null); };
   const insertBar=i=>{ setBars(bs=>[...bs.slice(0,i+1),{...bs[i]},...bs.slice(i+1)]); setEditIdx(i+1); };
@@ -154,12 +157,12 @@ export default function Player() {
   const save=()=>{
     const name=saveName.trim();
     if (!name) return;
-    const entry={name,key,tempo,bars};
+    const entry={name,key,tempo,bars,feel};
     const next=[...saved.filter(s=>s.name!==name),entry];
     setSaved(next);
     localStorage.setItem(STORE_KEY,JSON.stringify(next));
   };
-  const loadEntry=s=>{ setKey(s.key); setTempo(s.tempo); setBars(s.bars); setSaveName(s.name); setEditIdx(null); };
+  const loadEntry=s=>{ setKey(s.key); setTempo(s.tempo); setBars(s.bars); setFeel(s.feel||'straight'); setSaveName(s.name); setEditIdx(null); };
   const deleteEntry=name=>{
     const next=saved.filter(s=>s.name!==name);
     setSaved(next);
@@ -224,6 +227,12 @@ export default function Player() {
         <label className="flex items-center gap-1.5 text-sm text-gray-400 cursor-pointer">
           <input type="checkbox" checked={loop} onChange={e=>setLoop(e.target.checked)} className="accent-amber-500"/> Loop
         </label>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-gray-500 uppercase tracking-wide">Feel</span>
+          {[['straight','Straight'],['shuffle','Shuffle']].map(([k,l])=>(
+            <button key={k} onClick={()=>setFeel(k)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${feel===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{l}</button>
+          ))}
+        </div>
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-gray-500 uppercase tracking-wide">Guitar</span>
           {[['cowboy','Cowboy'],['triads','Triads'],['off','Muted']].map(([k,l])=>(
@@ -302,7 +311,7 @@ export default function Player() {
       </div>
 
       <div className="mt-6 text-xs text-gray-600 border-t border-gray-800 pt-4">
-        <p><strong className="text-gray-500">How to use:</strong> Pick a key and a preset (or click any bar to edit its chord, and + to add bars). Cowboy chords shows the simplest first-position grip for each bar; Triads shows a voice-led triad path on your chosen string set — the same voicing logic as the Progressions page. The <strong>View</strong> and the <strong>Guitar</strong> sound are independent, and you can switch views while it plays: watch the triads while the guitar strums cowboy chords to follow along, set Guitar to Triads to hear what the triads should sound like, or mute it and play the triads yourself over the rhythm section. Stomp is a foot-tap on 1 and 3, Kit is a basic kick/snare/hats groove, Bass is an upright playing root–fifth. Saved progressions live in your browser.</p>
+        <p><strong className="text-gray-500">How to use:</strong> Pick a key and a preset (or click any bar to edit its chord, and + to add bars). Cowboy chords shows the simplest first-position grip for each bar; Triads shows a voice-led triad path on your chosen string set — the same voicing logic as the Progressions page. The <strong>View</strong> and the <strong>Guitar</strong> sound are independent, and you can switch views while it plays: watch the triads while the guitar strums cowboy chords to follow along, set Guitar to Triads to hear what the triads should sound like, or mute it and play the triads yourself over the rhythm section. Stomp is a foot-tap on 1 and 3, Kit is a basic kick/snare/hats groove, Bass is an upright playing root–fifth. Shuffle swings the offbeat strums and hats onto the triplet grid (the blues preset selects it automatically). Saved progressions live in your browser.</p>
       </div>
     </div>
     </div>
