@@ -93,6 +93,16 @@ export function scheduleBass(midi, when, gain=0.9) {
   if (entry) slotLast.set('bass', { ...entry, t: when });
 }
 
+// Lead guitar: monophonic single-note lines on the same guitar samples.
+export function scheduleLead(midi, when, gain=0.6) {
+  const prev = slotLast.get('lead');
+  if (prev) {
+    try { prev.g.gain.setTargetAtTime(0, Math.max(prev.t, when-0.01), 0.025); } catch { /* ended */ }
+  }
+  const entry = startNote(midi, when, gain, 'guitar');
+  if (entry) slotLast.set('lead', { ...entry, t: when });
+}
+
 /* Synthesized drums: kick, snare, hat, and a duller foot-stomp thud. */
 let noiseBuf = null;
 function getNoise() {

@@ -1,10 +1,10 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
-  NOTES, SCALE, DEGS, QS, QKEYS, STRING_SETS,
+  NOTES, SCALE, DEGS, QS, QKEYS, STRING_SETS, isMinorFamily,
   getVoicings, closestVoicing, hasOpenString, firstPositionGrip,
 } from './music.js';
 import FretDiag, { GripDiag } from './FretDiag.jsx';
-import { ensureCtx, ctxTime, preload, scheduleStrum, scheduleBass, scheduleDrum, stopAll, voicingMidis, STRING_MIDI } from './audio.js';
+import { ensureCtx, ctxTime, preload, scheduleStrum, scheduleBass, scheduleDrum, scheduleLead, stopAll, voicingMidis, STRING_MIDI } from './audio.js';
 
 const PRESETS = [
   { name:'12-Bar Blues', feel:'shuffle', bars:[[0,'7'],[0,'7'],[0,'7'],[0,'7'],[3,'7'],[3,'7'],[0,'7'],[0,'7'],[4,'7'],[3,'7'],[0,'7'],[4,'7']] },
@@ -23,6 +23,22 @@ const PATTERN = [
   { b:3,   dir:'down', g:0.75 },
   { b:3.5, dir:'up',   g:0.4 },
 ];
+
+// Pentatonic notes on this string set within the triad voicing's fret window —
+// i.e., the lick vocabulary of that CAGED position (what the Overlay shows).
+function leadPool(ch, voicing, strs) {
+  const ivs = isMinorFamily(ch.quality) ? [0,3,5,7,10] : [0,2,4,7,9];
+  const pcs = new Set(ivs.map(iv=>(ch.root+iv)%12));
+  const nz = voicing.frets.filter(f=>f>0);
+  const lo = Math.max(0,(nz.length?Math.min(...nz):0)-2);
+  const hi = Math.max(...voicing.frets)+3;
+  const pool = [];
+  for (const s of strs) for (let f=lo;f<=hi;f++) {
+    const m = STRING_MIDI[s]+f;
+    if (m<=78 && pcs.has(m%12)) pool.push(m); // 78 = top of the sample range
+  }
+  return [...new Set(pool)].sort((a,b)=>a-b);
+}
 
 const STORE_KEY = 'mrtriad.savedProgressions';
 const loadSaved = () => { try { return JSON.parse(localStorage.getItem(STORE_KEY))||[]; } catch { return []; } };
@@ -43,6 +59,7 @@ export default function Player() {
   const [sound,setSound]=useState('cowboy'); // guitar channel: cowboy | triads | off
   const [drums,setDrums]=useState('off');   // off | stomp | kit
   const [bassOn,setBassOn]=useState(false);
+  const [lead,setLead]=useState('off');     // off | fills | solo
   const [playing,setPlaying]=useState(false);
   const [currentBar,setCurrentBar]=useState(null);
   const [editIdx,setEditIdx]=useState(null);
@@ -90,7 +107,7 @@ export default function Player() {
   },[]);
 
   useEffect(()=>stop,[stop]); // unmount
-  useEffect(()=>{ stop(); },[bars,key,setKeySel,tempo,sound,drums,bassOn,feel,stop]); // structural changes invalidate the schedule
+  useEffect(()=>{ stop(); },[bars,key,setKeySel,tempo,sound,drums,bassOn,lead,feel,stop]); // structural changes invalidate the schedule
 
   const start=()=>{
     if (playing) { stop(); return; }
@@ -99,7 +116,8 @@ export default function Player() {
     // Shuffle: offbeat eighths land on the triplet 2/3 instead of halfway.
     const sw=feel==='shuffle'?(b=>Math.floor(b)+(b%1?2/3:0)):(b=>b);
     const events=[];
-    const bassMidis=[];
+    const bassMidis=[],leadMidis=[];
+    let leadLast=null; // walker carries across bars so lines connect through chord changes
     bars.forEach((_,i)=>{
       const base=i*barDur;
       PATTERN.forEach(p=>events.push({t:base+sw(p.b)*spb,type:'strum',i,dir:p.dir,g:p.g}));
@@ -119,9 +137,40 @@ export default function Player() {
         events.push({t:base+2*spb,type:'bass',m:fifthM,g:0.85});
         bassMidis.push(rootM,fifthM);
       }
+      if (lead!=='off'&&triadPath[i]) {
+        const pool=leadPool(chords[i],triadPath[i],strs);
+        if (pool.length>2) {
+          const nearest=m=>pool.reduce((b,x,j)=>Math.abs(x-m)<Math.abs(pool[b]-m)?j:b,0);
+          if (lead==='solo') {
+            for (const b of [0,0.5,1,1.5,2,2.5,3,3.5]) {
+              if (Math.random()<(b===0?0.55:0.3)) continue; // rests keep it from droning
+              let idx;
+              if (leadLast===null) idx=Math.floor(pool.length*0.6);
+              else {
+                idx=nearest(leadLast);
+                const r=Math.random();
+                idx+=r<0.38?-1:r<0.76?1:r<0.88?-2:2;
+                idx=Math.max(0,Math.min(pool.length-1,idx));
+              }
+              leadLast=pool[idx];
+              leadMidis.push(leadLast);
+              events.push({t:base+sw(b)*spb+(Math.random()-0.5)*0.014,type:'lead',m:leadLast,g:b%1?0.5:0.62});
+            }
+          } else if ((i+1)%4===0) { // fills: a directed run into every 4th bar
+            const dir=Math.random()<0.5?1:-1;
+            let idx=leadLast!==null?nearest(leadLast):Math.floor(pool.length*(dir===1?0.3:0.7));
+            for (const b of [2,2.5,3,3.5]) {
+              idx=Math.max(0,Math.min(pool.length-1,idx+dir));
+              leadLast=pool[idx];
+              leadMidis.push(leadLast);
+              events.push({t:base+sw(b)*spb+(Math.random()-0.5)*0.014,type:'lead',m:leadLast,g:b%1?0.52:0.62});
+            }
+          }
+        }
+      }
     });
     events.sort((a,b)=>a.t-b.t);
-    Promise.all([preload(barMidis.flat()),bassOn?preload(bassMidis,'bass'):Promise.resolve()]).then(()=>{
+    Promise.all([preload([...barMidis.flat(),...leadMidis]),bassOn?preload(bassMidis,'bass'):Promise.resolve()]).then(()=>{
       const t0=ctxTime()+0.12;
       const st={t0,nextIdx:0,events,loopDur,barDur};
       st.timer=setInterval(()=>{
@@ -135,6 +184,7 @@ export default function Player() {
           if (ev.type==='strum') { if (barMidis[ev.i].length) scheduleStrum(barMidis[ev.i],t,{dir:ev.dir,gain:ev.g}); }
           else if (ev.type==='drum') scheduleDrum(ev.kind,t,ev.g);
           else if (ev.type==='bass') scheduleBass(ev.m,t,ev.g);
+          else if (ev.type==='lead') scheduleLead(ev.m,t,ev.g);
           st.nextIdx++;
         }
         const pos=now-st.t0;
@@ -251,6 +301,12 @@ export default function Player() {
             <button key={l} onClick={()=>setBassOn(k)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${bassOn===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{l}</button>
           ))}
         </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-gray-500 uppercase tracking-wide">Lead</span>
+          {[['off','Off'],['fills','Fills'],['solo','Solo']].map(([k,l])=>(
+            <button key={k} onClick={()=>setLead(k)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${lead===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{l}</button>
+          ))}
+        </div>
         <span className="text-xs text-gray-600">Strum: D · D U · U D U</span>
       </div>
 
@@ -311,7 +367,7 @@ export default function Player() {
       </div>
 
       <div className="mt-6 text-xs text-gray-600 border-t border-gray-800 pt-4">
-        <p><strong className="text-gray-500">How to use:</strong> Pick a key and a preset (or click any bar to edit its chord, and + to add bars). Cowboy chords shows the simplest first-position grip for each bar; Triads shows a voice-led triad path on your chosen string set — the same voicing logic as the Progressions page. The <strong>View</strong> and the <strong>Guitar</strong> sound are independent, and you can switch views while it plays: watch the triads while the guitar strums cowboy chords to follow along, set Guitar to Triads to hear what the triads should sound like, or mute it and play the triads yourself over the rhythm section. Stomp is a foot-tap on 1 and 3, Kit is a basic kick/snare/hats groove, Bass is an upright playing root–fifth. Shuffle swings the offbeat strums and hats onto the triplet grid (the blues preset selects it automatically). Saved progressions live in your browser.</p>
+        <p><strong className="text-gray-500">How to use:</strong> Pick a key and a preset (or click any bar to edit its chord, and + to add bars). Cowboy chords shows the simplest first-position grip for each bar; Triads shows a voice-led triad path on your chosen string set — the same voicing logic as the Progressions page. The <strong>View</strong> and the <strong>Guitar</strong> sound are independent, and you can switch views while it plays: watch the triads while the guitar strums cowboy chords to follow along, set Guitar to Triads to hear what the triads should sound like, or mute it and play the triads yourself over the rhythm section. Stomp is a foot-tap on 1 and 3, Kit is a basic kick/snare/hats groove, Bass is an upright playing root–fifth. Shuffle swings the offbeat strums and hats onto the triplet grid (the blues preset selects it automatically). Lead improvises pentatonic notes drawn from each bar's triad position on the selected string set — Fills plays a run into every 4th bar, Solo noodles throughout; each press of Play writes a new solo, and it loops as played. Saved progressions live in your browser.</p>
       </div>
     </div>
     </div>
