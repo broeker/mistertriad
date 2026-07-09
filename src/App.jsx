@@ -5,6 +5,7 @@ import {
 } from './music.js';
 import FretDiag from './FretDiag.jsx';
 import TriadFinder from './TriadFinder.jsx';
+import Player from './Player.jsx';
 import { strum, voicingMidis } from './audio.js';
 
 function getShapeChordNotes(cr) {
@@ -361,7 +362,10 @@ function ProgressionPage() {
           <h1 className="text-2xl font-bold text-amber-400">Mr. Triad</h1>
           <p className="text-sm text-gray-400">Choose a key and add your chords, then find the smoothest path through your progression.</p>
         </div>
-        <a href="#/triadfinder" className="px-3 py-1.5 rounded-md text-xs font-medium bg-emerald-700 text-emerald-100 border border-emerald-600 hover:bg-emerald-500 hover:text-white hover:border-emerald-400 transition-all whitespace-nowrap">Triad Finder →</a>
+        <div className="flex gap-2 flex-col sm:flex-row">
+          <a href="#/triadfinder" className="px-3 py-1.5 rounded-md text-xs font-medium bg-emerald-700 text-emerald-100 border border-emerald-600 hover:bg-emerald-500 hover:text-white hover:border-emerald-400 transition-all whitespace-nowrap text-center">Triad Finder →</a>
+          <a href="#/player" className="px-3 py-1.5 rounded-md text-xs font-medium bg-emerald-700 text-emerald-100 border border-emerald-600 hover:bg-emerald-500 hover:text-white hover:border-emerald-400 transition-all whitespace-nowrap text-center">Player →</a>
+        </div>
       </div>
 
       <div className="mb-4 mt-4">
@@ -521,5 +525,6 @@ function useHashRoute() {
 export default function App() {
   const route=useHashRoute();
   if (route.startsWith('#/triadfinder')) return <TriadFinder/>;
+  if (route.startsWith('#/player')) return <Player/>;
   return <ProgressionPage/>;
 }

@@ -142,7 +142,10 @@ export default function TriadFinder() {
           <h1 className="text-2xl font-bold text-amber-400">Triad Finder</h1>
           <p className="text-sm text-gray-400">Every {chordName} position on the top four 3-string sets, mapped to CAGED shapes.</p>
         </div>
-        <a href="#/" className="px-3 py-1.5 rounded-md text-xs font-medium bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700 hover:text-white transition-all whitespace-nowrap">← Progressions</a>
+        <div className="flex gap-2 flex-col sm:flex-row">
+          <a href="#/" className="px-3 py-1.5 rounded-md text-xs font-medium bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700 hover:text-white transition-all whitespace-nowrap text-center">← Progressions</a>
+          <a href="#/player" className="px-3 py-1.5 rounded-md text-xs font-medium bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700 hover:text-white transition-all whitespace-nowrap text-center">Player →</a>
+        </div>
       </div>
 
       <div className="mb-4 mt-4">
