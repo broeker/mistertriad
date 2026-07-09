@@ -39,6 +39,7 @@ export default function Player() {
   const [view,setView]=useState('cowboy');
   const [setKeySel,setSetKeySel]=useState('321');
   const [loop,setLoop]=useState(true);
+  const [sound,setSound]=useState('cowboy'); // guitar channel: cowboy | triads | off
   const [drums,setDrums]=useState('off');   // off | stomp | kit
   const [bassOn,setBassOn]=useState(false);
   const [playing,setPlaying]=useState(false);
@@ -71,13 +72,14 @@ export default function Player() {
     return path;
   },[chords,strs]);
 
-  // What each bar sounds like in the current view.
+  // What the guitar channel plays per bar — independent of the displayed view.
   const barMidis=useMemo(()=>chords.map((ch,i)=>{
-    if (view==='cowboy'&&grips[i]) {
+    if (sound==='off') return [];
+    if (sound==='cowboy'&&grips[i]) {
       return [6,5,4,3,2,1].filter(s=>grips[i].frets[s]).map(s=>STRING_MIDI[s]+grips[i].frets[s].fret);
     }
     return triadPath[i]?voicingMidis(strs,triadPath[i].frets):[];
-  }),[chords,view,grips,triadPath,strs]);
+  }),[chords,sound,grips,triadPath,strs]);
 
   const stop=useCallback(()=>{
     if (playRef.current) { clearInterval(playRef.current.timer); playRef.current=null; }
@@ -87,7 +89,7 @@ export default function Player() {
   },[]);
 
   useEffect(()=>stop,[stop]); // unmount
-  useEffect(()=>{ stop(); },[bars,key,view,setKeySel,tempo,drums,bassOn,stop]); // structural changes invalidate the schedule
+  useEffect(()=>{ stop(); },[bars,key,setKeySel,tempo,sound,drums,bassOn,stop]); // structural changes invalidate the schedule
 
   const start=()=>{
     if (playing) { stop(); return; }
@@ -223,6 +225,12 @@ export default function Player() {
           <input type="checkbox" checked={loop} onChange={e=>setLoop(e.target.checked)} className="accent-amber-500"/> Loop
         </label>
         <div className="flex items-center gap-1.5">
+          <span className="text-xs text-gray-500 uppercase tracking-wide">Guitar</span>
+          {[['cowboy','Cowboy'],['triads','Triads'],['off','Muted']].map(([k,l])=>(
+            <button key={k} onClick={()=>setSound(k)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${sound===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{l}</button>
+          ))}
+        </div>
+        <div className="flex items-center gap-1.5">
           <span className="text-xs text-gray-500 uppercase tracking-wide">Drums</span>
           {[['off','Off'],['stomp','Stomp'],['kit','Kit']].map(([k,l])=>(
             <button key={k} onClick={()=>setDrums(k)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${drums===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{l}</button>
@@ -294,7 +302,7 @@ export default function Player() {
       </div>
 
       <div className="mt-6 text-xs text-gray-600 border-t border-gray-800 pt-4">
-        <p><strong className="text-gray-500">How to use:</strong> Pick a key and a preset (or click any bar to edit its chord, and + to add bars). Cowboy chords shows the simplest first-position grip for each bar; Triads shows a voice-led triad path on your chosen string set — the same voicing logic as the Progressions page. Playback strums whichever view you're looking at. Add a rhythm section if you like: Stomp is a foot-tap on 1 and 3, Kit is a basic kick/snare/hats groove, and Bass is an upright playing root–fifth. Saved progressions live in your browser.</p>
+        <p><strong className="text-gray-500">How to use:</strong> Pick a key and a preset (or click any bar to edit its chord, and + to add bars). Cowboy chords shows the simplest first-position grip for each bar; Triads shows a voice-led triad path on your chosen string set — the same voicing logic as the Progressions page. The <strong>View</strong> and the <strong>Guitar</strong> sound are independent, and you can switch views while it plays: watch the triads while the guitar strums cowboy chords to follow along, set Guitar to Triads to hear what the triads should sound like, or mute it and play the triads yourself over the rhythm section. Stomp is a foot-tap on 1 and 3, Kit is a basic kick/snare/hats groove, Bass is an upright playing root–fifth. Saved progressions live in your browser.</p>
       </div>
     </div>
     </div>
