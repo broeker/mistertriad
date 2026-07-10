@@ -104,6 +104,35 @@
      "brush_l1_rr4.mp3"
     ]
    ]
+  },
+  "ride": {
+   "trim": 0.4,
+   "layers": [
+    [
+     "ride_l0_rr1.mp3",
+     "ride_l0_rr2.mp3",
+     "ride_l0_rr3.mp3",
+     "ride_l0_rr4.mp3"
+    ],
+    [
+     "ride_l1_rr1.mp3",
+     "ride_l1_rr2.mp3",
+     "ride_l1_rr3.mp3",
+     "ride_l1_rr4.mp3"
+    ]
+   ]
+  },
+  "rim": {
+   "trim": 0.5,
+   "layers": [
+    [
+     "rim_l0_rr1.mp3",
+     "rim_l0_rr2.mp3",
+     "rim_l0_rr3.mp3",
+     "rim_l0_rr4.mp3",
+     "rim_l0_rr5.mp3"
+    ]
+   ]
   }
  }
 }

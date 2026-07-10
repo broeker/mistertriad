@@ -134,11 +134,15 @@ export function setMix(m) { mix = m || {}; applySettings(); }
 
 const BASE = `${import.meta.env.BASE_URL}samples/`;
 
-// Alternate guitar sample sets (same flat per-note layout, different folders).
-export const GUITAR_SETS = { musyng:'guitar', fluid:'guitar-fluid', fatboy:'guitar-fatboy' };
+// Alternate sample sets: guitar folders are flat per-note; bass folders are
+// manifest-driven. Switching just remaps the instrument to another folder.
+export const GUITAR_SETS = { musyng:'guitar', fluid:'guitar-fluid', fatboy:'guitar-fatboy', nylon:'guitar-nylon', jazz:'guitar-jazz', muted:'guitar-muted' };
+export const BASS_SETS = { upright:'bass', electric:'bass-electric' };
 let guitarFolder = GUITAR_SETS.fatboy;
+let bassFolder = BASS_SETS.upright;
 export function setGuitarSet(key) { guitarFolder = GUITAR_SETS[key] || GUITAR_SETS.fatboy; }
-const folderOf = inst => inst === 'guitar' ? guitarFolder : inst;
+export function setBassSet(key) { bassFolder = BASS_SETS[key] || BASS_SETS.upright; }
+const folderOf = inst => inst === 'guitar' ? guitarFolder : inst === 'bass' ? bassFolder : inst;
 
 function decode(key, url) {
   if (!loading.has(key)) {

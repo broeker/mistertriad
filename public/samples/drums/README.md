@@ -10,8 +10,9 @@ https://rytmenpinne.wordpress.com/sounds-and-such/salamander-drumkit/ dated
 2022-03-04: "this is now public domain! Have fun with it, it's yours and
 noones!"). Attribution kept here out of courtesy.
 
-This is a flattened subset: kick/snare/hat/toms, two velocity layers each,
-4–5 round-robins per layer, peak-normalized per piece and encoded to MP3.
+This is a flattened subset: kick/snare/hat/toms/ride/rim (stick clicks),
+1–2 velocity layers each, 4–5 round-robins per layer, peak-normalized per
+piece and encoded to MP3.
 `manifest.json` maps piece names to layers/round-robins plus a `trim` mix
 level.
 

@@ -1,0 +1,149 @@
+{
+ "type": "pitched",
+ "notes": {
+  "28": {
+   "layers": [
+    [
+     "m28_mp_rr1.mp3",
+     "m28_mp_rr2.mp3",
+     "m28_mp_rr3.mp3",
+     "m28_mp_rr4.mp3"
+    ],
+    [
+     "m28_f_rr1.mp3",
+     "m28_f_rr2.mp3",
+     "m28_f_rr3.mp3",
+     "m28_f_rr4.mp3"
+    ]
+   ]
+  },
+  "31": {
+   "layers": [
+    [
+     "m31_mp_rr1.mp3",
+     "m31_mp_rr2.mp3",
+     "m31_mp_rr3.mp3",
+     "m31_mp_rr4.mp3"
+    ],
+    [
+     "m31_f_rr1.mp3",
+     "m31_f_rr2.mp3",
+     "m31_f_rr3.mp3",
+     "m31_f_rr4.mp3"
+    ]
+   ]
+  },
+  "34": {
+   "layers": [
+    [
+     "m34_mp_rr1.mp3",
+     "m34_mp_rr2.mp3",
+     "m34_mp_rr3.mp3",
+     "m34_mp_rr4.mp3"
+    ],
+    [
+     "m34_f_rr1.mp3",
+     "m34_f_rr2.mp3",
+     "m34_f_rr3.mp3",
+     "m34_f_rr4.mp3"
+    ]
+   ]
+  },
+  "37": {
+   "layers": [
+    [
+     "m37_mp_rr1.mp3",
+     "m37_mp_rr2.mp3",
+     "m37_mp_rr3.mp3",
+     "m37_mp_rr4.mp3"
+    ],
+    [
+     "m37_f_rr1.mp3",
+     "m37_f_rr2.mp3",
+     "m37_f_rr3.mp3",
+     "m37_f_rr4.mp3"
+    ]
+   ]
+  },
+  "40": {
+   "layers": [
+    [
+     "m40_mp_rr1.mp3",
+     "m40_mp_rr2.mp3",
+     "m40_mp_rr3.mp3",
+     "m40_mp_rr4.mp3"
+    ],
+    [
+     "m40_f_rr1.mp3",
+     "m40_f_rr2.mp3",
+     "m40_f_rr3.mp3",
+     "m40_f_rr4.mp3"
+    ]
+   ]
+  },
+  "43": {
+   "layers": [
+    [
+     "m43_mp_rr1.mp3",
+     "m43_mp_rr2.mp3",
+     "m43_mp_rr3.mp3",
+     "m43_mp_rr4.mp3"
+    ],
+    [
+     "m43_f_rr1.mp3",
+     "m43_f_rr2.mp3",
+     "m43_f_rr3.mp3",
+     "m43_f_rr4.mp3"
+    ]
+   ]
+  },
+  "46": {
+   "layers": [
+    [
+     "m46_mp_rr1.mp3",
+     "m46_mp_rr2.mp3",
+     "m46_mp_rr3.mp3",
+     "m46_mp_rr4.mp3"
+    ],
+    [
+     "m46_f_rr1.mp3",
+     "m46_f_rr2.mp3",
+     "m46_f_rr3.mp3",
+     "m46_f_rr4.mp3"
+    ]
+   ]
+  },
+  "49": {
+   "layers": [
+    [
+     "m49_mp_rr1.mp3",
+     "m49_mp_rr2.mp3",
+     "m49_mp_rr3.mp3",
+     "m49_mp_rr4.mp3"
+    ],
+    [
+     "m49_f_rr1.mp3",
+     "m49_f_rr2.mp3",
+     "m49_f_rr3.mp3",
+     "m49_f_rr4.mp3"
+    ]
+   ]
+  },
+  "52": {
+   "layers": [
+    [
+     "m52_mp_rr1.mp3",
+     "m52_mp_rr2.mp3",
+     "m52_mp_rr3.mp3",
+     "m52_mp_rr4.mp3"
+    ],
+    [
+     "m52_f_rr1.mp3",
+     "m52_f_rr2.mp3",
+     "m52_f_rr3.mp3",
+     "m52_f_rr4.mp3"
+    ]
+   ]
+  }
+ }
+}
