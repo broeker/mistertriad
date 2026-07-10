@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   NOTES, SCALE, DEGS, QS, QKEYS, STRING_SETS, isMinorFamily,
   getVoicings, closestVoicing, hasOpenString, firstPositionGrip,
+  matchCAGEDZone, voicingKey,
 } from './music.js';
 import FretDiag, { GripDiag } from './FretDiag.jsx';
 import { ensureCtx, ctxTime, preload, preloadDrums, setMix, scheduleStrum, scheduleBass, scheduleDrum, scheduleLead, schedulePiano, stopAll, voicingMidis, STRING_MIDI, AUDIO_DEFAULTS, setAudioSettings, setGuitarSet as applyGuitarSet } from './audio.js';
@@ -207,36 +208,78 @@ export default function Player() {
   // Cowboy view: first-position grip per bar (null for dim/aug).
   const grips=useMemo(()=>chords.map(ch=>firstPositionGrip(ch.root,ch.quality)),[chords]);
 
-  // Triads view: voice-led path on the selected string set; repeated chords keep their voicing.
+  // Triads view: voice-led path on the selected string set; repeated chords keep
+  // their voicing. posIdx picks which of bar 1's voicings anchors the path (the
+  // neck position); pins force a specific voicing on a bar, and later bars
+  // re-lead from it.
   const strs=STRING_SETS.find(s=>s.key===setKeySel).strs;
-  const triadPath=useMemo(()=>{
+  const [posIdx,setPosIdx]=useState(0);
+  const [posMode,setPosMode]=useState('climb'); // climb: each loop pass moves to the next position
+  const [livePass,setLivePass]=useState(0);
+  const [pins,setPins]=useState({});
+
+  // Selectable anchor positions: bar 1's closed voicings, low to high.
+  const positions=useMemo(()=>{
+    if (!chords.length) return [];
+    const ch=chords[0];
+    const nts=QS[ch.quality].iv.map(iv=>(ch.root+iv)%12);
+    const vs=getVoicings(nts,ch.root,strs);
+    const closed=vs.filter(v=>!hasOpenString(v.frets));
+    return closed.length?closed:vs;
+  },[chords,strs]);
+  const pi=Math.min(posIdx,Math.max(0,positions.length-1));
+
+  const pathForAnchor=useCallback(anchor=>{
     const path=[];
     for (let i=0;i<chords.length;i++) {
       const ch=chords[i];
-      if (i>0&&chords[i-1].root===ch.root&&chords[i-1].quality===ch.quality) { path.push(path[i-1]); continue; }
       const nts=QS[ch.quality].iv.map(iv=>(ch.root+iv)%12);
       const vs=getVoicings(nts,ch.root,strs);
       if (!vs.length) { path.push(null); continue; }
-      const prev=i>0?path[i-1]:null;
+      const pinned=pins[i]!=null?vs.find(v=>voicingKey(v)===pins[i]):null;
+      if (pinned) { path.push(pinned); continue; }
+      if (i>0&&chords[i-1].root===ch.root&&chords[i-1].quality===ch.quality&&path[i-1]) { path.push(path[i-1]); continue; }
+      if (i===0) {
+        const closed=vs.filter(v=>!hasOpenString(v.frets));
+        const list=closed.length?closed:vs;
+        path.push(list[Math.min(anchor,list.length-1)]);
+        continue;
+      }
+      const prev=path[i-1];
       path.push(prev?closestVoicing(vs,prev.frets):(vs.find(v=>!hasOpenString(v.frets))||vs[0]));
     }
     return path;
-  },[chords,strs]);
+  },[chords,strs,pins]);
 
-  // What the guitar channel plays per bar — independent of the displayed view.
-  const barMidis=useMemo(()=>chords.map((ch,i)=>{
-    if (sound==='off') return [];
-    if (sound==='cowboy'&&grips[i]) {
-      return [6,5,4,3,2,1].filter(s=>grips[i].frets[s]).map(s=>STRING_MIDI[s]+grips[i].frets[s].fret);
-    }
-    return triadPath[i]?voicingMidis(strs,triadPath[i].frets):[];
-  }),[chords,sound,grips,triadPath,strs]);
+  // Climb order: up through every position, then back down (ping-pong).
+  const passOrder=useMemo(()=>{
+    const P=positions.length;
+    if (posMode!=='climb'||P<2) return [pi];
+    return [...Array(P).keys(),...Array.from({length:P-2},(_,k)=>P-2-k)];
+  },[posMode,positions.length,pi]);
+
+  // What the grid shows: the playing pass's position while climbing, else the manual pick.
+  const displayAnchor=posMode==='climb'&&playing?passOrder[Math.min(livePass,passOrder.length-1)]:pi;
+  const triadPath=useMemo(()=>pathForAnchor(displayAnchor),[pathForAnchor,displayAnchor]);
+
+  const fretWindow=v=>{
+    if (!v) return '';
+    const nz=v.frets.filter(f=>f>0);
+    const lo=nz.length?Math.min(...nz):0, hi=Math.max(...v.frets);
+    return lo===hi?`fret ${lo}`:`frets ${lo}–${hi}`;
+  };
+  const posLabel=useMemo(()=>{
+    const v=triadPath[0]; if (!v||!chords.length) return '';
+    const z=matchCAGEDZone(chords[0].root,chords[0].quality,v.frets);
+    return `${fretWindow(v)}${z?` · ${z.name}-shape`:''}`;
+  },[triadPath,chords]);
 
   const stop=useCallback(()=>{
     if (playRef.current) { clearInterval(playRef.current.timer); playRef.current=null; }
     stopAll();
     setPlaying(false);
     setCurrentBar(null);
+    setLivePass(0);
   },[]);
 
   useEffect(()=>stop,[stop]); // unmount
@@ -261,15 +304,29 @@ export default function Player() {
   // Playback walks whatever schedule sits in playRef; rebuilding and swapping it
   // mid-play (effect below start) is how settings change without stopping.
   const buildSchedule=useCallback(()=>{
-    const spb=60/tempo, barDur=4*spb, loopDur=bars.length*barDur;
+    const spb=60/tempo, barDur=4*spb;
+    const passBars=bars.length;
+    const loopDur=passOrder.length*passBars*barDur;
     // Shuffle: offbeat eighths land on the triplet 2/3 instead of halfway.
     const sw=feel==='shuffle'?(b=>Math.floor(b)+(b%1?2/3:0)):(b=>b);
     const events=[];
     const bassMidis=[],leadMidis=[],pianoMidis=[];
+    const guitarMidis=[]; // flattened: pass*passBars + bar
     let leadLast=null; // walker carries across bars so lines connect through chord changes
+    // One pass through the bars per position in passOrder; climbing plays the
+    // progression at each position in turn, transitions on the loop boundary.
+    passOrder.forEach((anchor,pass)=>{
+    const path=pathForAnchor(anchor);
     bars.forEach((_,i)=>{
-      const base=i*barDur;
-      STRUMS[strum].p.forEach(p=>events.push({t:base+sw(p.b)*spb,type:'strum',i,dir:p.dir,g:p.g,span:p.span}));
+      const gi=pass*passBars+i;
+      const base=gi*barDur;
+      let midis=[];
+      if (sound!=='off') {
+        if (sound==='cowboy'&&grips[i]) midis=[6,5,4,3,2,1].filter(s=>grips[i].frets[s]).map(s=>STRING_MIDI[s]+grips[i].frets[s].fret);
+        else if (path[i]) midis=voicingMidis(strs,path[i].frets);
+      }
+      guitarMidis.push(midis);
+      STRUMS[strum].p.forEach(p=>events.push({t:base+sw(p.b)*spb,type:'strum',i:gi,dir:p.dir,g:p.g,span:p.span}));
       if (drums==='stomp') {
         [0,2].forEach(b=>events.push({t:base+b*spb,type:'drum',kind:'stomp',g:b===0?1:0.8}));
       } else if (drums==='kit') {
@@ -327,8 +384,8 @@ export default function Player() {
           });
         }
       }
-      if (lead!=='off'&&triadPath[i]) {
-        const pool=leadPool(chords[i],triadPath[i],strs);
+      if (lead!=='off'&&path[i]) {
+        const pool=leadPool(chords[i],path[i],strs);
         if (pool.length>2) {
           const nearest=m=>pool.reduce((b,x,j)=>Math.abs(x-m)<Math.abs(pool[b]-m)?j:b,0);
           if (lead==='solo') {
@@ -365,10 +422,11 @@ export default function Player() {
         }
       }
     });
+    });
     events.sort((a,b)=>a.t-b.t);
-    return {events,loopDur,barDur,spb,guitarMidis:barMidis,bassMidis,leadMidis,pianoMidis};
+    return {events,loopDur,barDur,spb,guitarMidis,bassMidis,leadMidis,pianoMidis,passBars};
   // guitarSet is a dep so switching sample sets re-preloads and hot-swaps mid-play.
-  },[bars,chords,tempo,feel,strum,drums,drumFills,bassMode,lead,keys,triadPath,strs,barMidis,guitarSet]);
+  },[bars,chords,tempo,feel,strum,drums,drumFills,bassMode,lead,keys,passOrder,pathForAnchor,grips,sound,strs,guitarSet]);
 
   const tick=useCallback(()=>{
     const st=playRef.current;
@@ -391,7 +449,9 @@ export default function Player() {
     const pos=now-st.t0;
     if (pos>=0) {
       if (!loopRef.current&&pos>=st.loopDur) { stop(); return; }
-      setCurrentBar(Math.floor((pos%st.loopDur)/st.barDur));
+      const gBar=Math.floor((pos%st.loopDur)/st.barDur);
+      setCurrentBar(gBar%st.passBars);
+      setLivePass(Math.floor(gBar/st.passBars));
     }
   },[stop]);
 
@@ -432,7 +492,7 @@ export default function Player() {
   },[buildSchedule,stop]);
 
   const applyProgression=p=>{
-    setBars(toBars(p.bars)); setEditIdx(null); setMoreOpen(false);
+    setBars(toBars(p.bars)); setEditIdx(null); setMoreOpen(false); setPins({});
     const s=p.set||{};
     if (s.tempo!=null) setTempo(s.tempo);
     if (s.feel) setFeel(s.feel);
@@ -444,9 +504,24 @@ export default function Player() {
     if (s.keys) setKeys(s.keys);
     setMix(s.mix); // channel-level balance (e.g. {bass:1.2}); resets when absent
   };
-  const setBar=(i,patch)=>setBars(bs=>bs.map((b,j)=>j===i?{...b,...patch}:b));
-  const removeBar=i=>{ setBars(bs=>bs.filter((_,j)=>j!==i)); setEditIdx(null); };
-  const insertBar=i=>{ setBars(bs=>[...bs.slice(0,i+1),{...bs[i]},...bs.slice(i+1)]); setEditIdx(i+1); };
+  // Pins are keyed by bar index, so structural edits re-home them.
+  const remapPins=fn=>setPins(ps=>{
+    const n={};
+    for (const [k,v] of Object.entries(ps)) { const j=fn(+k); if (j!=null) n[j]=v; }
+    return n;
+  });
+  const setBar=(i,patch)=>{
+    setBars(bs=>bs.map((b,j)=>j===i?{...b,...patch}:b));
+    remapPins(j=>j===i?null:j); // a different chord invalidates the pinned voicing
+  };
+  const removeBar=i=>{
+    setBars(bs=>bs.filter((_,j)=>j!==i)); setEditIdx(null);
+    remapPins(j=>j===i?null:j>i?j-1:j);
+  };
+  const insertBar=i=>{
+    setBars(bs=>[...bs.slice(0,i+1),{...bs[i]},...bs.slice(i+1)]); setEditIdx(i+1);
+    remapPins(j=>j>i?j+1:j);
+  };
   const addBar=()=>setBars(bs=>[...bs,bs.length?{...bs[bs.length-1]}:{deg:0,q:'maj'}]);
 
   const save=()=>{
@@ -548,6 +623,19 @@ export default function Player() {
             </div>
           </div>
         )}
+        {view==='triads'&&(
+          <div>
+            <label className="text-xs text-gray-400 uppercase tracking-wide mb-2 block">Position <span className="normal-case text-gray-600">{positions.length>1?`${displayAnchor+1}/${positions.length} · `:''}{posLabel}</span></label>
+            <div className="flex gap-1.5">
+              <button onClick={()=>setPosMode('climb')} className={btn(posMode==='climb')}>Loop the neck</button>
+              <button onClick={()=>setPosMode('manual')} className={btn(posMode==='manual')}>Manual</button>
+              {posMode==='manual'&&(<>
+                <button onClick={()=>setPosIdx(Math.max(0,pi-1))} disabled={pi<=0} className="px-3 py-1.5 rounded text-sm font-medium bg-gray-800 text-gray-300 hover:bg-gray-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed">▼</button>
+                <button onClick={()=>setPosIdx(Math.min(positions.length-1,pi+1))} disabled={pi>=positions.length-1} className="px-3 py-1.5 rounded text-sm font-medium bg-gray-800 text-gray-300 hover:bg-gray-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed">▲</button>
+              </>)}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -643,7 +731,7 @@ export default function Player() {
             return (
               <div key={i} onClick={()=>setEditIdx(isEdit?null:i)}
                    className={`cursor-pointer rounded-lg border px-2 pt-1.5 pb-2 flex flex-col items-center transition-all min-w-[110px] ${isCur?'border-amber-500 bg-amber-500/10':isEdit?'border-emerald-500 bg-emerald-500/10':'border-gray-800 bg-gray-950 hover:border-gray-600'}`}>
-                <div className="text-[10px] text-gray-600 self-start">bar {i+1}</div>
+                <div className="text-[10px] text-gray-600 self-start">bar {i+1}{pins[i]!=null&&<span className="text-emerald-500"> · pinned</span>}</div>
                 <div className="text-sm font-bold text-amber-400">{ch.name} <span className="text-gray-500 font-normal text-xs">({ch.numeral})</span></div>
                 {view==='cowboy'
                   ? (grips[i]
@@ -675,6 +763,28 @@ export default function Player() {
             <div className="flex flex-wrap gap-1.5">
               {QKEYS.map(q=>(<button key={q} onClick={()=>setBar(editIdx,{q})} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${bars[editIdx].q===q?'bg-amber-500 text-gray-900':'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>{QS[q].l}</button>))}
             </div>
+            {view==='triads'&&(()=>{
+              const ch=chords[editIdx];
+              const nts=QS[ch.quality].iv.map(iv=>(ch.root+iv)%12);
+              const vs=getVoicings(nts,ch.root,strs).filter(v=>!hasOpenString(v.frets));
+              if (!vs.length) return null;
+              const curKey=voicingKey(triadPath[editIdx]);
+              return (
+                <>
+                  <div className="text-xs text-gray-500 mb-1.5 mt-2.5">Voicing <span className="text-gray-600">(pins this bar; later bars voice-lead from it)</span></div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button onClick={()=>remapPins(j=>j===editIdx?null:j)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${pins[editIdx]==null?'bg-emerald-600 text-white':'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>Auto</button>
+                    {vs.map(v=>{
+                      const k=voicingKey(v);
+                      const cls=pins[editIdx]===k?'bg-amber-500 text-gray-900'
+                        :k===curKey?'bg-gray-700 text-emerald-400 ring-1 ring-emerald-600'
+                        :'bg-gray-700 text-gray-300 hover:bg-gray-600';
+                      return <button key={k} onClick={()=>setPins(ps=>({...ps,[editIdx]:k}))} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${cls}`}>{fretWindow(v)}</button>;
+                    })}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )}
       </div>
@@ -692,7 +802,7 @@ export default function Player() {
       </div>
 
       <div className="mt-6 text-xs text-gray-600 border-t border-gray-800 pt-4">
-        <p><strong className="text-gray-500">How to use:</strong> Pick a genre, then one of its iconic progressions — or click any bar to edit its chord, and + to add bars. Switching genre loads that genre's first progression along with its sound — pick another from the list (<strong>More…</strong> opens the genre's full catalog with numerals and bar counts) or edit the bars from there. Cowboy chords shows the simplest first-position grip for each bar; Triads shows a voice-led triad path on your chosen string set — the same voicing logic as the Progressions page. Everything is live while it plays — tempo, key, band, even switching progressions — playback carries on from the same beat. The <strong>View</strong> and the <strong>Guitar</strong> sound are independent, and you can switch views while it plays: watch the triads while the guitar strums cowboy chords to follow along, set Guitar to Triads to hear what the triads should sound like, or mute it and play the triads yourself over the rhythm section. A <strong>Genre</strong> button sets tempo, feel, strum pattern, and the band in one tap — every knob stays individually adjustable after. Some progressions also pin part of the band to fit their character (Cabbage locks in the driving boom-chick and alternating bass); knobs a progression doesn't pin keep your current settings. Strums: Folk is D-DU-UDU; Boom-chick picks the bass note on 1 and 3 and strums the top strings on 2 and 4 (old-time rhythm guitar); Bluegrass adds upstroke fills to the boom-chick; Lo-fi is sparse and lazy. Drums: Stomp (foot-tap), Kit (kick/snare/hats), Train (brushes with a backbeat); the Fills toggle throws a snare/tom run into every 4th bar, different each time Play builds the loop. Keys adds an upright piano comping block chords on each bar; Comp + Fills also sprinkles a chord-tone run into every 4th bar, new each time Play builds the loop (Lo-Fi presets this, Alt Country comps plain). Bass is an upright: Root, Root–5th, Walking (with chromatic approaches), or Boogie (the swung R-3-5-6 shuffle line). Shuffle swings the offbeat strums and hats onto the triplet grid (the blues preset selects it automatically). Lead improvises pentatonic notes drawn from each bar's triad position on the selected string set — Fills plays a run into every 4th bar, Solo noodles throughout; each press of Play writes a new solo, and it loops as played. The lead also rolls guitar articulations as it goes: bends into strong beats and fill endings, hammer-on/pull-off legato on quick close steps, and the occasional double stop. Saved progressions live in your browser.</p>
+        <p><strong className="text-gray-500">How to use:</strong> Pick a genre, then one of its iconic progressions — or click any bar to edit its chord, and + to add bars. Switching genre loads that genre's first progression along with its sound — pick another from the list (<strong>More…</strong> opens the genre's full catalog with numerals and bar counts) or edit the bars from there. Cowboy chords shows the simplest first-position grip for each bar; Triads shows a voice-led triad path on your chosen string set — the same voicing logic as the Progressions page. <strong>Position</strong> controls where the path sits on the neck. <strong>Loop the neck</strong> (the default) plays the progression once per position, climbing up and back down, changing exactly on the loop boundary — the diagrams and the counter follow along, so you can ride the whole neck hands-free. <strong>Manual</strong> parks it in one position with ▼/▲ steppers. Either way the improvised Lead follows the position, since its notes come from each bar's voicing. To bend the path at one spot, click a bar and pick a <strong>Voicing</strong>: that bar is pinned (marked on its card) and later bars re-lead from it; Auto unpins. Everything is live while it plays — tempo, key, band, even switching progressions — playback carries on from the same beat. The <strong>View</strong> and the <strong>Guitar</strong> sound are independent, and you can switch views while it plays: watch the triads while the guitar strums cowboy chords to follow along, set Guitar to Triads to hear what the triads should sound like, or mute it and play the triads yourself over the rhythm section. A <strong>Genre</strong> button sets tempo, feel, strum pattern, and the band in one tap — every knob stays individually adjustable after. Some progressions also pin part of the band to fit their character (Cabbage locks in the driving boom-chick and alternating bass); knobs a progression doesn't pin keep your current settings. Strums: Folk is D-DU-UDU; Boom-chick picks the bass note on 1 and 3 and strums the top strings on 2 and 4 (old-time rhythm guitar); Bluegrass adds upstroke fills to the boom-chick; Lo-fi is sparse and lazy. Drums: Stomp (foot-tap), Kit (kick/snare/hats), Train (brushes with a backbeat); the Fills toggle throws a snare/tom run into every 4th bar, different each time Play builds the loop. Keys adds an upright piano comping block chords on each bar; Comp + Fills also sprinkles a chord-tone run into every 4th bar, new each time Play builds the loop (Lo-Fi presets this, Alt Country comps plain). Bass is an upright: Root, Root–5th, Walking (with chromatic approaches), or Boogie (the swung R-3-5-6 shuffle line). Shuffle swings the offbeat strums and hats onto the triplet grid (the blues preset selects it automatically). Lead improvises pentatonic notes drawn from each bar's triad position on the selected string set — Fills plays a run into every 4th bar, Solo noodles throughout; each press of Play writes a new solo, and it loops as played. The lead also rolls guitar articulations as it goes: bends into strong beats and fill endings, hammer-on/pull-off legato on quick close steps, and the occasional double stop. Saved progressions live in your browser.</p>
         <p className="mt-2">Sounds: guitar from the <a href="https://github.com/gleitz/midi-js-soundfonts" className="underline hover:text-gray-400">FatBoy SoundFont</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/" className="underline hover:text-gray-400">CC BY-SA 3.0</a>); upright bass from <a href="https://github.com/sfzinstruments/karoryfer.meatbass" className="underline hover:text-gray-400">Meatbass</a> by Karoryfer Samples (CC0); drums from the <a href="https://archive.org/details/SalamanderDrumkit" className="underline hover:text-gray-400">Salamander Drumkit</a> by Alexander Holm (public domain); brushes from <a href="https://shop.karoryfer.com/pages/free-samples" className="underline hover:text-gray-400">Swirly Drums</a> by Karoryfer Samples (CC0); upright piano from the <a href="https://github.com/sgossner/VCSL" className="underline hover:text-gray-400">Versilian Community Sample Library</a> (CC0).</p>
       </div>
     </div>
