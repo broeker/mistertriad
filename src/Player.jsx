@@ -75,6 +75,46 @@ const PROGRESSIONS = {
     { name:'I7–IV7 Vamp', bars:[[0,'7'],[0,'7'],[3,'7'],[3,'7']] },
     { name:'vi7–ii7 Vamp', bars:[[5,'min7'],[5,'min7'],[1,'min7'],[1,'min7']] },
   ],
+  honkytonk: [
+    { name:'12-Bar Country', bars:[[0],[0],[0],[0],[3],[3],[0],[0],[4],[4],[0],[0]] },
+    { name:'I–IV–I–V', bars:[[0],[3],[0],[4],[0],[3],[4],[0]] },
+    { name:'I–I7–IV–V7', bars:[[0],[0,'7'],[3],[4,'7'],[0],[0,'7'],[3],[4,'7']] },
+  ],
+  piedmont: [
+    { name:'8-Bar Blues (Highway)', bars:[[0,'7'],[4,'7'],[3,'7'],[3,'7'],[0,'7'],[4,'7'],[0,'7'],[4,'7']] },
+    { name:'Freight Train (I–V7–III7–IV)', bars:[[0],[0],[4,'7'],[4,'7'],[0],[0],[2,'7'],[2,'7'],[3],[3],[0],[4,'7']] },
+    { name:'Quick-Change 12-Bar', bars:[[0,'7'],[3,'7'],[0,'7'],[0,'7'],[3,'7'],[3,'7'],[0,'7'],[0,'7'],[4,'7'],[3,'7'],[0,'7'],[4,'7']] },
+  ],
+  slowblues: [
+    { name:'12-Bar Slow Blues (7ths)', bars:[[0,'7'],[0,'7'],[0,'7'],[0,'7'],[3,'7'],[3,'7'],[0,'7'],[0,'7'],[4,'7'],[3,'7'],[0,'7'],[4,'7']] },
+    { name:'Quick-Change 12-Bar', bars:[[0,'7'],[3,'7'],[0,'7'],[0,'7'],[3,'7'],[3,'7'],[0,'7'],[0,'7'],[4,'7'],[3,'7'],[0,'7'],[4,'7']] },
+    { name:'Minor Blues', bars:[[0,'min7'],[0,'min7'],[0,'min7'],[0,'min7'],[3,'min7'],[3,'min7'],[0,'min7'],[0,'min7'],[4,'7'],[3,'min7'],[0,'min7'],[4,'7']] },
+  ],
+  folkwaltz: [
+    { name:'Waltz (I–IV–I–V)', bars:[[0],[3],[0],[4],[0],[3],[4],[0]] },
+    { name:'Waltz (I–vi–IV–V)', bars:[[0],[5,'min'],[3],[4],[0],[5,'min'],[3],[4]] },
+    { name:'Two-Chord Waltz (I–V)', bars:[[0],[0],[4],[4],[0],[0],[4],[0]] },
+  ],
+  countrywaltz: [
+    { name:'Waltz (I–IV–I–V)', bars:[[0],[3],[0],[4],[0],[3],[4],[0]] },
+    { name:'Waltz (I–V–V–I)', bars:[[0],[0],[4],[4],[4],[4],[0],[0]] },
+    { name:'Waltz (I–I7–IV–I)', bars:[[0],[0,'7'],[3],[0],[0],[0,'7'],[4],[0]] },
+  ],
+  rocknroll: [
+    { name:'50s (I–vi–IV–V)', bars:[[0],[5,'min'],[3],[4],[0],[5,'min'],[3],[4]] },
+    { name:'12-Bar Rock & Roll', bars:[[0],[0],[0],[0],[3],[3],[0],[0],[4],[3],[0],[0]] },
+    { name:'I–IV–V', bars:[[0],[3],[4],[0],[0],[3],[4],[0]] },
+  ],
+  rockabilly: [
+    { name:'12-Bar Shuffle (7ths)', bars:[[0,'7'],[0,'7'],[0,'7'],[0,'7'],[3,'7'],[3,'7'],[0,'7'],[0,'7'],[4,'7'],[3,'7'],[0,'7'],[4,'7']] },
+    { name:'Quick-Change 12-Bar', bars:[[0,'7'],[3,'7'],[0,'7'],[0,'7'],[3,'7'],[3,'7'],[0,'7'],[0,'7'],[4,'7'],[3,'7'],[0,'7'],[4,'7']] },
+    { name:'8-Bar Bop (I–V)', bars:[[0],[0],[4],[4],[0],[0],[4],[0]] },
+  ],
+  jazzwaltz: [
+    { name:'ii–V–I', bars:[[1,'min7'],[4,'7'],[0,'maj7'],[0,'maj7']] },
+    { name:'Rhythm (I–vi–ii–V)', bars:[[0,'maj7'],[5,'min7'],[1,'min7'],[4,'7'],[0,'maj7'],[5,'min7'],[1,'min7'],[4,'7']] },
+    { name:'Minor Waltz (vi7–ii7–V7–Imaj7)', bars:[[5,'min7'],[1,'min7'],[4,'7'],[0,'maj7'],[5,'min7'],[1,'min7'],[4,'7'],[0,'maj7']] },
+  ],
 };
 const toBars = barDefs => barDefs.map(([deg,q='maj'])=>({deg,q}));
 const barsKey = bs => bs.map(b=>`${b.deg}:${b.q}`).join(',');
@@ -101,55 +141,208 @@ const progSummary = barDefs => {
   return ns.filter((n,i)=>i===0||n!==ns[i-1]).join('–');
 };
 
-// Strum patterns (b = beat offset within a 4/4 bar; span: full/top/bass).
+// Meters. Pattern `b` values are quarter-note beats in simple meters; in 6/8
+// they're dotted-quarter pulse units (tempo = pulse bpm) with eighths on
+// thirds. `grid` is the bar's subdivision — lead lines and fill placement
+// derive from it. swing:false meters are already compound, so the Shuffle
+// feel is forced straight there.
+const METERS = {
+  '4/4': { label:'4/4', beats:4, grid:[0,0.5,1,1.5,2,2.5,3,3.5], swing:true  },
+  '3/4': { label:'3/4', beats:3, grid:[0,0.5,1,1.5,2,2.5],       swing:true  },
+  '6/8': { label:'6/8', beats:2, grid:[0,1/3,2/3,1,4/3,5/3],     swing:false },
+};
+const METER_KEYS = Object.keys(METERS);
+
+// Strum patterns, keyed by meter (span: full/top/bass). A strum supports only
+// the meters it defines; the UI hides it elsewhere and falls back to Folk.
 const STRUMS = {
-  folk: { label:'Folk', p:[
-    { b:0, dir:'down', g:1.0 }, { b:1, dir:'down', g:0.75 }, { b:1.5, dir:'up', g:0.4 },
-    { b:2.5, dir:'up', g:0.4 }, { b:3, dir:'down', g:0.75 }, { b:3.5, dir:'up', g:0.4 },
-  ]},
-  boomchick: { label:'Boom-chick', p:[
-    { b:0, dir:'down', g:1.0, span:'bass' }, { b:1, dir:'down', g:0.8, span:'top' },
-    { b:2, dir:'down', g:0.95, span:'bass' }, { b:3, dir:'down', g:0.8, span:'top' },
-  ]},
-  bluegrass: { label:'Bluegrass', p:[
-    { b:0, dir:'down', g:1.0, span:'bass' }, { b:1, dir:'down', g:0.8, span:'top' }, { b:1.5, dir:'up', g:0.35 },
-    { b:2, dir:'down', g:0.95, span:'bass' }, { b:3, dir:'down', g:0.8, span:'top' }, { b:3.5, dir:'up', g:0.35 },
-  ]},
-  lofi: { label:'Lo-fi', p:[
-    { b:0, dir:'down', g:0.85 }, { b:1.5, dir:'up', g:0.35 },
-    { b:2, dir:'down', g:0.7 }, { b:3.5, dir:'up', g:0.3 },
-  ]},
-  pop: { label:'Pop', p:[
-    { b:0, dir:'down', g:1.0 }, { b:0.5, dir:'up', g:0.35 }, { b:1, dir:'down', g:0.6 }, { b:1.5, dir:'up', g:0.4 },
-    { b:2, dir:'down', g:0.9 }, { b:2.5, dir:'up', g:0.35 }, { b:3, dir:'down', g:0.6 }, { b:3.5, dir:'up', g:0.45 },
-  ]},
-  travis: { label:'Travis', p:[ // thumb on every beat, soft finger picks on the ands
-    { b:0, dir:'down', g:1.0, span:'bass' }, { b:0.5, dir:'up', g:0.4 }, { b:1, dir:'down', g:0.8, span:'bass' }, { b:1.5, dir:'up', g:0.45 },
-    { b:2, dir:'down', g:0.95, span:'bass' }, { b:2.5, dir:'up', g:0.4 }, { b:3, dir:'down', g:0.8, span:'bass' }, { b:3.5, dir:'up', g:0.45 },
-  ]},
-  bossa: { label:'Bossa', p:[
-    { b:0, dir:'down', g:0.85 }, { b:1, dir:'down', g:0.5 }, { b:1.5, dir:'up', g:0.55 },
-    { b:2.5, dir:'up', g:0.55 }, { b:3, dir:'down', g:0.6 },
-  ]},
-  funk: { label:'Funk', p:[ // straight-16th scratch accents; falls apart charmingly under shuffle
-    { b:0, dir:'down', g:1.0 }, { b:0.75, dir:'up', g:0.45 }, { b:1, dir:'down', g:0.4 }, { b:1.5, dir:'up', g:0.5 },
-    { b:2, dir:'down', g:0.9 }, { b:2.75, dir:'up', g:0.45 }, { b:3, dir:'down', g:0.4 }, { b:3.5, dir:'up', g:0.55 },
-  ]},
+  folk: { label:'Folk', p:{
+    '4/4':[ // D-DU-UDU
+      { b:0, dir:'down', g:1.0 }, { b:1, dir:'down', g:0.75 }, { b:1.5, dir:'up', g:0.4 },
+      { b:2.5, dir:'up', g:0.4 }, { b:3, dir:'down', g:0.75 }, { b:3.5, dir:'up', g:0.4 },
+    ],
+    '3/4':[ // waltz D-DU-DU
+      { b:0, dir:'down', g:1.0 }, { b:1, dir:'down', g:0.7 }, { b:1.5, dir:'up', g:0.4 },
+      { b:2, dir:'down', g:0.7 }, { b:2.5, dir:'up', g:0.4 },
+    ],
+    '6/8':[ // flowing Dud-Dud
+      { b:0, dir:'down', g:1.0 }, { b:1/3, dir:'up', g:0.35 }, { b:2/3, dir:'down', g:0.5 },
+      { b:1, dir:'down', g:0.8 }, { b:4/3, dir:'up', g:0.35 }, { b:5/3, dir:'down', g:0.5 },
+    ],
+  }},
+  boomchick: { label:'Boom-chick', p:{
+    '4/4':[
+      { b:0, dir:'down', g:1.0, span:'bass' }, { b:1, dir:'down', g:0.8, span:'top' },
+      { b:2, dir:'down', g:0.95, span:'bass' }, { b:3, dir:'down', g:0.8, span:'top' },
+    ],
+    '3/4':[ // bass-chick-chick
+      { b:0, dir:'down', g:1.0, span:'bass' }, { b:1, dir:'down', g:0.8, span:'top' },
+      { b:2, dir:'down', g:0.75, span:'top' },
+    ],
+  }},
+  bluegrass: { label:'Bluegrass', p:{
+    '4/4':[
+      { b:0, dir:'down', g:1.0, span:'bass' }, { b:1, dir:'down', g:0.8, span:'top' }, { b:1.5, dir:'up', g:0.35 },
+      { b:2, dir:'down', g:0.95, span:'bass' }, { b:3, dir:'down', g:0.8, span:'top' }, { b:3.5, dir:'up', g:0.35 },
+    ],
+  }},
+  lofi: { label:'Lo-fi', p:{
+    '4/4':[
+      { b:0, dir:'down', g:0.85 }, { b:1.5, dir:'up', g:0.35 },
+      { b:2, dir:'down', g:0.7 }, { b:3.5, dir:'up', g:0.3 },
+    ],
+    '3/4':[ // sparse waltz comp (doubles as jazz-waltz guitar)
+      { b:0, dir:'down', g:0.85 }, { b:1.5, dir:'up', g:0.4 }, { b:2, dir:'down', g:0.55 },
+    ],
+    '6/8':[
+      { b:0, dir:'down', g:0.85 }, { b:2/3, dir:'up', g:0.35 },
+      { b:1, dir:'down', g:0.6 }, { b:5/3, dir:'up', g:0.3 },
+    ],
+  }},
+  pop: { label:'Pop', p:{
+    '4/4':[
+      { b:0, dir:'down', g:1.0 }, { b:0.5, dir:'up', g:0.35 }, { b:1, dir:'down', g:0.6 }, { b:1.5, dir:'up', g:0.4 },
+      { b:2, dir:'down', g:0.9 }, { b:2.5, dir:'up', g:0.35 }, { b:3, dir:'down', g:0.6 }, { b:3.5, dir:'up', g:0.45 },
+    ],
+  }},
+  travis: { label:'Travis', p:{
+    '4/4':[ // thumb on every beat, soft finger picks on the ands
+      { b:0, dir:'down', g:1.0, span:'bass' }, { b:0.5, dir:'up', g:0.4 }, { b:1, dir:'down', g:0.8, span:'bass' }, { b:1.5, dir:'up', g:0.45 },
+      { b:2, dir:'down', g:0.95, span:'bass' }, { b:2.5, dir:'up', g:0.4 }, { b:3, dir:'down', g:0.8, span:'bass' }, { b:3.5, dir:'up', g:0.45 },
+    ],
+    '3/4':[
+      { b:0, dir:'down', g:1.0, span:'bass' }, { b:0.5, dir:'up', g:0.4 }, { b:1, dir:'down', g:0.8, span:'bass' },
+      { b:1.5, dir:'up', g:0.45 }, { b:2, dir:'down', g:0.85, span:'bass' }, { b:2.5, dir:'up', g:0.4 },
+    ],
+    '6/8':[ // thumb on both pulses, picks between
+      { b:0, dir:'down', g:1.0, span:'bass' }, { b:1/3, dir:'up', g:0.4 }, { b:2/3, dir:'up', g:0.45 },
+      { b:1, dir:'down', g:0.85, span:'bass' }, { b:4/3, dir:'up', g:0.4 }, { b:5/3, dir:'up', g:0.45 },
+    ],
+  }},
+  bossa: { label:'Bossa', p:{
+    '4/4':[
+      { b:0, dir:'down', g:0.85 }, { b:1, dir:'down', g:0.5 }, { b:1.5, dir:'up', g:0.55 },
+      { b:2.5, dir:'up', g:0.55 }, { b:3, dir:'down', g:0.6 },
+    ],
+  }},
+  funk: { label:'Funk', p:{
+    '4/4':[ // straight-16th scratch accents; falls apart charmingly under shuffle
+      { b:0, dir:'down', g:1.0 }, { b:0.75, dir:'up', g:0.45 }, { b:1, dir:'down', g:0.4 }, { b:1.5, dir:'up', g:0.5 },
+      { b:2, dir:'down', g:0.9 }, { b:2.75, dir:'up', g:0.45 }, { b:3, dir:'down', g:0.4 }, { b:3.5, dir:'up', g:0.55 },
+    ],
+  }},
 };
 
-// A genre is a bundle of the knobs: tempo, feel, strum pattern, rhythm section.
+// Drum patterns per mode and meter ({b,kind,g}; sw: swings with the feel).
+// 4/4 entries are the original inline patterns, transcribed exactly.
+const DRUM_PATTERNS = {
+  stomp: {
+    '4/4':[ {b:0,kind:'stomp',g:1}, {b:2,kind:'stomp',g:0.8} ],
+    '3/4':[ {b:0,kind:'stomp',g:1} ],
+    '6/8':[ {b:0,kind:'stomp',g:1}, {b:1,kind:'stomp',g:0.8} ],
+  },
+  kit: {
+    '4/4':[
+      {b:0,kind:'kick',g:1}, {b:2,kind:'kick',g:1}, {b:1,kind:'snare',g:1}, {b:3,kind:'snare',g:1},
+      {b:0,kind:'hat',g:1,sw:true},{b:0.5,kind:'hat',g:0.7,sw:true},{b:1,kind:'hat',g:1,sw:true},{b:1.5,kind:'hat',g:0.7,sw:true},
+      {b:2,kind:'hat',g:1,sw:true},{b:2.5,kind:'hat',g:0.7,sw:true},{b:3,kind:'hat',g:1,sw:true},{b:3.5,kind:'hat',g:0.7,sw:true},
+    ],
+    '3/4':[ // waltz: kick on 1, soft snares on 2 and 3
+      {b:0,kind:'kick',g:1}, {b:1,kind:'snare',g:0.7}, {b:2,kind:'snare',g:0.6},
+      {b:0,kind:'hat',g:1,sw:true},{b:0.5,kind:'hat',g:0.7,sw:true},{b:1,kind:'hat',g:1,sw:true},
+      {b:1.5,kind:'hat',g:0.7,sw:true},{b:2,kind:'hat',g:1,sw:true},{b:2.5,kind:'hat',g:0.7,sw:true},
+    ],
+    '6/8':[ // slow-blues 6/8: kick on 1, snare on the second pulse, hats on all six
+      {b:0,kind:'kick',g:1}, {b:1,kind:'snare',g:1},
+      {b:0,kind:'hat',g:0.85},{b:1/3,kind:'hat',g:0.55},{b:2/3,kind:'hat',g:0.55},
+      {b:1,kind:'hat',g:0.85},{b:4/3,kind:'hat',g:0.55},{b:5/3,kind:'hat',g:0.55},
+    ],
+  },
+  train: {
+    '4/4':[
+      {b:0,kind:'kick',g:0.6}, {b:2,kind:'kick',g:0.6},
+      {b:0,kind:'brush',g:0.55,sw:true},{b:0.5,kind:'brush',g:0.55,sw:true},{b:1,kind:'brush',g:1,sw:true},{b:1.5,kind:'brush',g:0.55,sw:true},
+      {b:2,kind:'brush',g:0.55,sw:true},{b:2.5,kind:'brush',g:0.55,sw:true},{b:3,kind:'brush',g:1,sw:true},{b:3.5,kind:'brush',g:0.55,sw:true},
+    ],
+    '3/4':[
+      {b:0,kind:'kick',g:0.6},
+      {b:0,kind:'brush',g:0.55,sw:true},{b:0.5,kind:'brush',g:0.55,sw:true},{b:1,kind:'brush',g:1,sw:true},
+      {b:1.5,kind:'brush',g:0.55,sw:true},{b:2,kind:'brush',g:1,sw:true},{b:2.5,kind:'brush',g:0.55,sw:true},
+    ],
+    '6/8':[
+      {b:0,kind:'kick',g:0.6},
+      {b:0,kind:'brush',g:0.85},{b:1/3,kind:'brush',g:0.5},{b:2/3,kind:'brush',g:0.5},
+      {b:1,kind:'brush',g:1},{b:4/3,kind:'brush',g:0.5},{b:5/3,kind:'brush',g:0.5},
+    ],
+  },
+  bossa: {
+    '4/4':[
+      {b:0,kind:'kick',g:0.75}, {b:2,kind:'kick',g:0.75},
+      {b:0,kind:'hat',g:0.55},{b:0.5,kind:'hat',g:0.4},{b:1,kind:'hat',g:0.55},{b:1.5,kind:'hat',g:0.4},
+      {b:2,kind:'hat',g:0.55},{b:2.5,kind:'hat',g:0.4},{b:3,kind:'hat',g:0.55},{b:3.5,kind:'hat',g:0.4},
+      {b:1,kind:'rim',g:0.9},{b:2.5,kind:'rim',g:0.9},
+    ],
+  },
+  swing: {
+    '4/4':[
+      {b:0,kind:'ride',g:0.8,sw:true},{b:1,kind:'ride',g:1,sw:true},{b:1.5,kind:'ride',g:0.6,sw:true},
+      {b:2,kind:'ride',g:0.8,sw:true},{b:3,kind:'ride',g:1,sw:true},{b:3.5,kind:'ride',g:0.6,sw:true},
+      {b:1,kind:'hat',g:0.5},{b:3,kind:'hat',g:0.5},
+      {b:0,kind:'kick',g:0.3},{b:2,kind:'kick',g:0.3},
+    ],
+    '3/4':[ // jazz waltz ride
+      {b:0,kind:'ride',g:0.9,sw:true},{b:1,kind:'ride',g:1,sw:true},{b:1.5,kind:'ride',g:0.6,sw:true},
+      {b:2,kind:'ride',g:0.8,sw:true},
+      {b:1,kind:'hat',g:0.5},
+      {b:0,kind:'kick',g:0.3},
+    ],
+  },
+  funk: {
+    '4/4':[
+      {b:0,kind:'kick',g:1},{b:1.75,kind:'kick',g:0.8},{b:2.5,kind:'kick',g:0.9},
+      {b:1,kind:'snare',g:1},{b:3,kind:'snare',g:1},
+      {b:0.75,kind:'snare',g:0.4},{b:2.25,kind:'snare',g:0.4},
+      {b:0,kind:'hat',g:0.85},{b:0.5,kind:'hat',g:0.55},{b:1,kind:'hat',g:0.85},{b:1.5,kind:'hat',g:0.55},
+      {b:2,kind:'hat',g:0.85},{b:2.5,kind:'hat',g:0.55},{b:3,kind:'hat',g:0.85},{b:3.5,kind:'hat',g:0.55},
+    ],
+  },
+};
+
+// Which meters each bass mode supports (boogie/bossa/funk lines are 4/4 idioms).
+const BASS_METERS = {
+  root:['4/4','3/4','6/8'], root5:['4/4','3/4','6/8'], walk:['4/4','3/4','6/8'],
+  boogie:['4/4'], bossa:['4/4'], funk:['4/4'],
+};
+
+// A style is a bundle of the knobs: meter, tempo, feel, strum pattern, rhythm
+// section, sample sets. Styles group under genre tabs (Genre → Style picker).
+const GENRE_GROUPS = ['Country','Blues','Folk','Rock & Pop','Jazz & Latin','Groove'];
 const GENRES = [
-  { key:'oldtime',   label:'Old-Time Country', tempo:100, feel:'straight', strum:'boomchick', drums:'train', bass:'root5',  lead:'off',   drumFills:false, keys:'off' },
-  { key:'bluegrass', label:'Bluegrass',        tempo:145, feel:'straight', strum:'bluegrass', drums:'off',   bass:'walk',   lead:'fills', drumFills:false, keys:'off' },
-  { key:'folk',      label:'Folk',             tempo:96,  feel:'straight', strum:'travis',    drums:'off',   bass:'root5',  lead:'fills', drumFills:false, keys:'off' },
-  { key:'blues',     label:'Blues',            tempo:84,  feel:'shuffle',  strum:'folk',      drums:'kit',   bass:'boogie', lead:'fills', drumFills:true,  keys:'off' },
-  { key:'altcountry',label:'Alt Country',      tempo:95,  feel:'straight', strum:'folk',      drums:'kit',   bass:'root5',  lead:'off',   drumFills:true,  keys:'on' },
-  { key:'pop',       label:'Pop',              tempo:116, feel:'straight', strum:'pop',       drums:'kit',   bass:'root5',  lead:'off',   drumFills:true,  keys:'on',  bassInst:'electric' },
-  { key:'indiepop',  label:'Indie Pop',        tempo:128, feel:'straight', strum:'pop',       drums:'kit',   bass:'root',   lead:'off',   drumFills:false, keys:'off', bassInst:'electric' },
-  { key:'bossa',     label:'Bossa Nova',       tempo:120, feel:'straight', strum:'bossa',     drums:'bossa', bass:'bossa',  lead:'off',   drumFills:false, keys:'on',  guitarInst:'nylon' },
-  { key:'jazz',      label:'Jazz',             tempo:132, feel:'shuffle',  strum:'lofi',      drums:'swing', bass:'walk',   lead:'fills', drumFills:false, keys:'on',  guitarInst:'jazz' },
-  { key:'funk',      label:'Funk',             tempo:102, feel:'straight', strum:'funk',      drums:'funk',  bass:'funk',   lead:'off',   drumFills:true,  keys:'off', bassInst:'electric', guitarInst:'muted' },
-  { key:'lofi',      label:'Lo-Fi',            tempo:72,  feel:'shuffle',  strum:'lofi',      drums:'kit',   bass:'root',   lead:'solo',  drumFills:false, keys:'fills' },
+  // Country
+  { key:'oldtime',    group:'Country', label:'Old-Time',      tempo:100, feel:'straight', strum:'boomchick', drums:'train', bass:'root5',  lead:'off',   drumFills:false, keys:'off' },
+  { key:'bluegrass',  group:'Country', label:'Bluegrass',     tempo:145, feel:'straight', strum:'bluegrass', drums:'off',   bass:'walk',   lead:'fills', drumFills:false, keys:'off' },
+  { key:'honkytonk',  group:'Country', label:'Honky-Tonk',    tempo:105, feel:'shuffle',  strum:'boomchick', drums:'kit',   bass:'root5',  lead:'fills', drumFills:false, keys:'on',  guitarInst:'jazz' },
+  { key:'altcountry', group:'Country', label:'Alt Country',   tempo:95,  feel:'straight', strum:'folk',      drums:'kit',   bass:'root5',  lead:'off',   drumFills:true,  keys:'on' },
+  { key:'countrywaltz',group:'Country',label:'Country Waltz', meter:'3/4', tempo:90, feel:'straight', strum:'boomchick', drums:'train', bass:'root5', lead:'fills', drumFills:false, keys:'off' },
+  // Blues
+  { key:'blues',      group:'Blues', label:'Blues',           tempo:84,  feel:'shuffle',  strum:'folk',      drums:'kit',   bass:'boogie', lead:'fills', drumFills:true,  keys:'off' },
+  { key:'piedmont',   group:'Blues', label:'Piedmont',        tempo:110, feel:'shuffle',  strum:'travis',    drums:'off',   bass:'root',   lead:'off',   drumFills:false, keys:'off' },
+  { key:'slowblues',  group:'Blues', label:'Slow Blues',      meter:'6/8', tempo:60, feel:'straight', strum:'folk', drums:'kit', bass:'walk', lead:'fills', drumFills:true, keys:'on' },
+  // Folk
+  { key:'folk',       group:'Folk', label:'Folk',             tempo:96,  feel:'straight', strum:'travis',    drums:'off',   bass:'root5',  lead:'fills', drumFills:false, keys:'off' },
+  { key:'folkwaltz',  group:'Folk', label:'Folk Waltz',       meter:'3/4', tempo:100, feel:'straight', strum:'travis', drums:'off', bass:'root5', lead:'off', drumFills:false, keys:'off' },
+  // Rock & Pop
+  { key:'pop',        group:'Rock & Pop', label:'Pop',        tempo:116, feel:'straight', strum:'pop',       drums:'kit',   bass:'root5',  lead:'off',   drumFills:true,  keys:'on',  bassInst:'electric' },
+  { key:'indiepop',   group:'Rock & Pop', label:'Indie Pop',  tempo:128, feel:'straight', strum:'pop',       drums:'kit',   bass:'root',   lead:'off',   drumFills:false, keys:'off', bassInst:'electric' },
+  { key:'rocknroll',  group:'Rock & Pop', label:'Rock & Roll',tempo:150, feel:'straight', strum:'pop',       drums:'kit',   bass:'boogie', lead:'fills', drumFills:true,  keys:'on',  bassInst:'electric', guitarInst:'jazz' },
+  { key:'rockabilly', group:'Rock & Pop', label:'Rockabilly', tempo:170, feel:'shuffle',  strum:'folk',      drums:'kit',   bass:'boogie', lead:'fills', drumFills:true,  keys:'off', guitarInst:'jazz' },
+  // Jazz & Latin
+  { key:'jazz',       group:'Jazz & Latin', label:'Jazz',     tempo:132, feel:'shuffle',  strum:'lofi',      drums:'swing', bass:'walk',   lead:'fills', drumFills:false, keys:'on',  guitarInst:'jazz' },
+  { key:'bossa',      group:'Jazz & Latin', label:'Bossa Nova',tempo:120, feel:'straight', strum:'bossa',    drums:'bossa', bass:'bossa',  lead:'off',   drumFills:false, keys:'on',  guitarInst:'nylon' },
+  { key:'jazzwaltz',  group:'Jazz & Latin', label:'Jazz Waltz', meter:'3/4', tempo:140, feel:'shuffle', strum:'lofi', drums:'swing', bass:'walk', lead:'fills', drumFills:false, keys:'on', guitarInst:'jazz' },
+  // Groove
+  { key:'funk',       group:'Groove', label:'Funk',           tempo:102, feel:'straight', strum:'funk',      drums:'funk',  bass:'funk',   lead:'off',   drumFills:true,  keys:'off', bassInst:'electric', guitarInst:'muted' },
+  { key:'lofi',       group:'Groove', label:'Lo-Fi',          tempo:72,  feel:'shuffle',  strum:'lofi',      drums:'kit',   bass:'root',   lead:'solo',  drumFills:false, keys:'fills' },
 ];
 
 // Drum fills: three swung-eighth hits into every 4th bar, moving around the
@@ -263,6 +456,7 @@ export default function Player() {
   const setSectionBars=(sec,upd)=>setSections(s=>({...s,[sec]:typeof upd==='function'?upd(s[sec]):upd}));
   const setBars=upd=>setSectionBars(activeSec,upd);
   const [tempo,setTempo]=useState(DEFAULT_GENRE.tempo);
+  const [meter,setMeter]=useState(DEFAULT_GENRE.meter||'4/4');
   const [view,setView]=useState('cowboy');
   const [setKeySel,setSetKeySel]=useState(AUTO_KEY);
   const [loop,setLoop]=useState(true);
@@ -275,6 +469,7 @@ export default function Player() {
   const [lead,setLead]=useState(DEFAULT_GENRE.lead);     // off | fills | solo
   const [keys,setKeys]=useState(DEFAULT_GENRE.keys);     // off | on — upright piano comping
   const [genre,setGenre]=useState(DEFAULT_GENRE.key);
+  const [genreTab,setGenreTab]=useState(DEFAULT_GENRE.group); // browsed group tab
   const [playing,setPlaying]=useState(false);
   const [currentBar,setCurrentBar]=useState(null);
   const [editIdx,setEditIdx]=useState(null);
@@ -434,8 +629,18 @@ export default function Player() {
   });
   const resetMixer=()=>{ localStorage.removeItem(MIXER_KEY); setMixer(JSON.parse(JSON.stringify(AUDIO_DEFAULTS))); };
 
+  // Manual meter switch: pull knobs that don't exist in the new meter back to
+  // ones that do, in the same update, so buildSchedule never sees a bad combo.
+  const applyMeter=m=>{
+    setMeter(m);
+    if (!METERS[m].swing&&feel==='shuffle') setFeel('straight');
+    if (!STRUMS[strum].p[m]) setStrum('folk');
+    if (drums!=='off'&&!DRUM_PATTERNS[drums]?.[m]) setDrums('kit');
+    if (bassMode!=='off'&&!BASS_METERS[bassMode]?.includes(m)) setBassMode('root5');
+  };
+
   const applyGenre=g=>{
-    setGenre(g.key); setTempo(g.tempo); setFeel(g.feel); setStrum(g.strum);
+    setGenre(g.key); setGenreTab(g.group); setMeter(g.meter||'4/4'); setTempo(g.tempo); setFeel(g.feel); setStrum(g.strum);
     setDrums(g.drums); setBassMode(g.bass); setLead(g.lead); setDrumFills(g.drumFills); setKeys(g.keys);
     setBassSet(g.bassInst||'upright');
     setGuitarSet(g.guitarInst||'fatboy');
@@ -451,11 +656,18 @@ export default function Player() {
   // Playback walks whatever schedule sits in playRef; rebuilding and swapping it
   // mid-play (effect below start) is how settings change without stopping.
   const buildSchedule=useCallback(()=>{
-    const spb=60/tempo, barDur=4*spb;
+    const M=METERS[meter]||METERS['4/4'];
+    const spb=60/tempo, barDur=M.beats*spb;
     const passBars=flat.playLen; // one pass = the whole arrangement, flattened
     const loopDur=passOrder.length*passBars*barDur;
     // Shuffle: offbeat eighths land on the triplet 2/3 instead of halfway.
-    const sw=feel==='shuffle'?(b=>Math.floor(b)+(b%1?2/3:0)):(b=>b);
+    // Compound meters (6/8) are already triplet-based, so shuffle is a no-op.
+    const sw=(feel==='shuffle'&&M.swing)?(b=>Math.floor(b)+(b%1?2/3:0)):(b=>b);
+    // Guards: a stale knob/meter combo mid-rebuild falls back instead of crashing.
+    const strumPat=STRUMS[strum].p[meter]||STRUMS.folk.p[meter];
+    const drumPat=drums==='off'?null:(DRUM_PATTERNS[drums]?.[meter]||DRUM_PATTERNS.kit[meter]);
+    const bassEff=bassMode==='off'?'off':(BASS_METERS[bassMode]?.includes(meter)?bassMode:'root5');
+    const fill3=M.grid.slice(-3), fill4=M.grid.slice(-4), lastSlot=M.grid[M.grid.length-1];
     const events=[];
     const bassMidis=[],leadMidis=[],pianoMidis=[];
     const guitarMidis=[]; // flattened: pass*passBars + bar
@@ -473,59 +685,40 @@ export default function Player() {
         else if (path[i]) midis=voicingMidis(path[i].set.strs,path[i].frets);
       }
       guitarMidis.push(midis);
-      STRUMS[strum].p.forEach(p=>events.push({t:base+sw(p.b)*spb,type:'strum',i:gi,dir:p.dir,g:p.g,span:p.span}));
-      if (drums==='stomp') {
-        [0,2].forEach(b=>events.push({t:base+b*spb,type:'drum',kind:'stomp',g:b===0?1:0.8}));
-      } else if (drums==='kit') {
-        [0,2].forEach(b=>events.push({t:base+b*spb,type:'drum',kind:'kick',g:1}));
-        [1,3].forEach(b=>events.push({t:base+b*spb,type:'drum',kind:'snare',g:1}));
-        [0,0.5,1,1.5,2,2.5,3,3.5].forEach(b=>events.push({t:base+sw(b)*spb,type:'drum',kind:'hat',g:b%1?0.7:1}));
-      } else if (drums==='train') {
-        [0,2].forEach(b=>events.push({t:base+b*spb,type:'drum',kind:'kick',g:0.6}));
-        [0,0.5,1,1.5,2,2.5,3,3.5].forEach(b=>events.push({t:base+sw(b)*spb,type:'drum',kind:'brush',g:(b===1||b===3)?1:0.55}));
-      } else if (drums==='bossa') {
-        [0,2].forEach(b=>events.push({t:base+b*spb,type:'drum',kind:'kick',g:0.75}));
-        [0,0.5,1,1.5,2,2.5,3,3.5].forEach(b=>events.push({t:base+b*spb,type:'drum',kind:'hat',g:b%1?0.4:0.55}));
-        [1,2.5].forEach(b=>events.push({t:base+b*spb,type:'drum',kind:'rim',g:0.9}));
-      } else if (drums==='swing') {
-        [0,1,1.5,2,3,3.5].forEach(b=>events.push({t:base+sw(b)*spb,type:'drum',kind:'ride',g:b%1?0.6:(b%2?1:0.8)}));
-        [1,3].forEach(b=>events.push({t:base+b*spb,type:'drum',kind:'hat',g:0.5}));
-        [0,2].forEach(b=>events.push({t:base+b*spb,type:'drum',kind:'kick',g:0.3}));
-      } else if (drums==='funk') {
-        [[0,1],[1.75,0.8],[2.5,0.9]].forEach(([b,g])=>events.push({t:base+b*spb,type:'drum',kind:'kick',g}));
-        [1,3].forEach(b=>events.push({t:base+b*spb,type:'drum',kind:'snare',g:1}));
-        [0.75,2.25].forEach(b=>events.push({t:base+b*spb,type:'drum',kind:'snare',g:0.4}));
-        [0,0.5,1,1.5,2,2.5,3,3.5].forEach(b=>events.push({t:base+b*spb,type:'drum',kind:'hat',g:b%1?0.55:0.85}));
-      }
+      strumPat.forEach(p=>events.push({t:base+sw(p.b)*spb,type:'strum',i:gi,dir:p.dir,g:p.g,span:p.span}));
+      if (drumPat) drumPat.forEach(d=>events.push({t:base+(d.sw?sw(d.b):d.b)*spb,type:'drum',kind:d.kind,g:d.g}));
       if (drumFills&&!['off','stomp'].includes(drums)&&passBars>=4&&(i+1)%4===0) {
         const fill=DRUM_FILLS[Math.floor(Math.random()*DRUM_FILLS.length)];
         const soft=drums==='train'?0.8:1; // brushes-era kit plays fills gentler
-        [2.5,3,3.5].forEach((b,k)=>events.push({t:base+sw(b)*spb,type:'drum',kind:fill[k][0],g:fill[k][1]*soft}));
+        fill3.forEach((b,k)=>events.push({t:base+sw(b)*spb,type:'drum',kind:fill[k][0],g:fill[k][1]*soft}));
       }
-      if (bassMode!=='off') {
+      if (bassEff!=='off') {
         const ch=chords[i];
         const rootM=28+((ch.root-4+12)%12);          // E1..D#2
         const minish=isMinorFamily(ch.quality);
         const third=minish?3:4, fifth=ch.quality==='dim'?6:7, sixth=minish?10:9;
+        const fifthM=rootM-(12-fifth)>=28?rootM-(12-fifth):rootM+fifth;
+        const next=chords[(i+1)%passBars];
+        const nextRootM=28+((next.root-4+12)%12);
+        const sameNext=next.root===ch.root&&next.quality===ch.quality;
+        const approach=sameNext?rootM+sixth:(nextRootM-1>=28?nextRootM-1:nextRootM+1);
         const pushBass=(b,m,g,swung=false)=>{ events.push({t:base+(swung?sw(b):b)*spb,type:'bass',m,g}); bassMidis.push(m); };
-        if (bassMode==='root') {
+        if (bassEff==='root') {
           pushBass(0,rootM,1);
-        } else if (bassMode==='root5') {
-          const fifthM=rootM-(12-fifth)>=28?rootM-(12-fifth):rootM+fifth;
-          pushBass(0,rootM,1); pushBass(2,fifthM,0.85);
-        } else if (bassMode==='walk') {
-          const next=chords[(i+1)%passBars];
-          const nextRootM=28+((next.root-4+12)%12);
-          const sameNext=next.root===ch.root&&next.quality===ch.quality;
-          const approach=sameNext?rootM+sixth:(nextRootM-1>=28?nextRootM-1:nextRootM+1);
-          pushBass(0,rootM,1); pushBass(1,rootM+third,0.85); pushBass(2,rootM+fifth,0.9); pushBass(3,approach,0.85);
-        } else if (bassMode==='boogie') {
+          if (meter==='6/8') pushBass(1,rootM,0.75); // both pulses
+        } else if (bassEff==='root5') {
+          if (meter==='6/8') { pushBass(0,rootM,1); pushBass(1,fifthM,0.85); }
+          else { pushBass(0,rootM,1); pushBass(2,fifthM,0.85); } // 4/4 beat 3 / waltz beat 3
+        } else if (bassEff==='walk') {
+          if (meter==='3/4') { pushBass(0,rootM,1); pushBass(1,rootM+third,0.85); pushBass(2,approach,0.85); }
+          else if (meter==='6/8') { pushBass(0,rootM,1); pushBass(1,fifthM,0.85); if (!sameNext) pushBass(5/3,approach,0.6); }
+          else { pushBass(0,rootM,1); pushBass(1,rootM+third,0.85); pushBass(2,rootM+fifth,0.9); pushBass(3,approach,0.85); }
+        } else if (bassEff==='boogie') {
           const line=[0,0,third,third,fifth,fifth,sixth,sixth];
           [0,0.5,1,1.5,2,2.5,3,3.5].forEach((b,k)=>pushBass(b,rootM+line[k],b%1?0.7:0.95,true));
-        } else if (bassMode==='bossa') {
-          const fifthM=rootM-(12-fifth)>=28?rootM-(12-fifth):rootM+fifth;
+        } else if (bassEff==='bossa') {
           pushBass(0,rootM,1); pushBass(1.5,fifthM,0.7); pushBass(2,rootM,0.9); pushBass(3.5,fifthM,0.7);
-        } else if (bassMode==='funk') {
+        } else if (bassEff==='funk') {
           pushBass(0,rootM,1); pushBass(1.75,rootM+12,0.7); pushBass(2.5,rootM,0.9); pushBass(3.25,rootM+fifth,0.65);
         }
       }
@@ -533,7 +726,9 @@ export default function Player() {
         const pc=chords[i].root;
         const rootM=pc<6?60+pc:48+pc; // root position around middle C
         const pv=QS[chords[i].quality].iv.map(iv=>rootM+iv);
-        const hits=feel==='shuffle'?[[0,0.6],[2.5,0.45]]:[[0,0.6],[2,0.5]];
+        const hits=meter==='3/4'?[[0,0.6],[1,0.45],[2,0.45]]           // oom-pah-pah
+          :meter==='6/8'?[[0,0.6],[1,0.5]]                              // both pulses
+          :feel==='shuffle'?[[0,0.6],[2.5,0.45]]:[[0,0.6],[2,0.5]];
         hits.forEach(([b,g])=>events.push({t:base+sw(b)*spb,type:'piano',m:pv,g}));
         pianoMidis.push(...pv);
         if (keys==='fills'&&passBars>=4&&(i+1)%4===0) {
@@ -541,7 +736,7 @@ export default function Player() {
           const pool=pv.map(m=>m<66?m+12:m).sort((a,b)=>a-b);
           const dir=Math.random()<0.5?1:-1;
           let idx=dir===1?0:pool.length-1;
-          [2.5,3,3.5].forEach(b=>{
+          fill3.forEach(b=>{
             const m=pool[Math.max(0,Math.min(pool.length-1,idx))];
             events.push({t:base+sw(b)*spb,type:'pianoNote',m,g:0.5});
             pianoMidis.push(m);
@@ -554,7 +749,7 @@ export default function Player() {
         if (pool.length>2) {
           const nearest=m=>pool.reduce((b,x,j)=>Math.abs(x-m)<Math.abs(pool[b]-m)?j:b,0);
           if (lead==='solo') {
-            for (const b of [0,0.5,1,1.5,2,2.5,3,3.5]) {
+            for (const b of M.grid) {
               if (Math.random()<(b===0?0.55:0.3)) continue; // rests keep it from droning
               let idx;
               if (leadLast===null) idx=Math.floor(pool.length*0.6);
@@ -574,12 +769,12 @@ export default function Player() {
           } else if ((i+1)%4===0) { // fills: a directed run into every 4th bar
             const dir=Math.random()<0.5?1:-1;
             let idx=leadLast!==null?nearest(leadLast):Math.floor(pool.length*(dir===1?0.3:0.7));
-            for (const b of [2,2.5,3,3.5]) {
+            for (const b of fill4) {
               idx=Math.max(0,Math.min(pool.length-1,idx+dir));
               const prevM=leadLast;
               leadLast=pool[idx];
               leadMidis.push(leadLast);
-              const art=leadArt(pool,idx,prevM,b,b===3.5);
+              const art=leadArt(pool,idx,prevM,b,b===lastSlot);
               if (art?.double!=null) leadMidis.push(art.double);
               events.push({t:base+sw(b)*spb+(Math.random()-0.5)*0.014,type:'lead',m:leadLast,g:b%1?0.52:0.62,art});
             }
@@ -591,7 +786,7 @@ export default function Player() {
     events.sort((a,b)=>a.t-b.t);
     return {events,loopDur,barDur,spb,guitarMidis,bassMidis,leadMidis,pianoMidis,passBars};
   // guitarSet is a dep so switching sample sets re-preloads and hot-swaps mid-play.
-  },[flat,chords,tempo,feel,strum,drums,drumFills,bassMode,lead,keys,passOrder,pathForAnchor,grips,sound,guitarSet,bassSet]);
+  },[flat,chords,meter,tempo,feel,strum,drums,drumFills,bassMode,lead,keys,passOrder,pathForAnchor,grips,sound,guitarSet,bassSet]);
 
   const tick=useCallback(()=>{
     const st=playRef.current;
@@ -659,6 +854,7 @@ export default function Player() {
 
   const applySetOverrides=p=>{
     const s=p.set||{};
+    if (s.meter&&METERS[s.meter]) setMeter(s.meter);
     if (s.tempo!=null) setTempo(s.tempo);
     if (s.feel) setFeel(s.feel);
     if (s.strum) setStrum(s.strum);
@@ -706,13 +902,15 @@ export default function Player() {
   const save=()=>{
     const name=saveName.trim();
     if (!name) return;
-    const entry={name,key,tempo,sections,arrangement,pins,feel,strum,drums,drumFills,bassMode,lead,keys,genre};
+    const entry={name,key,meter,tempo,sections,arrangement,pins,feel,strum,drums,drumFills,bassMode,lead,keys,genre};
     const next=[...saved.filter(s=>s.name!==name),entry];
     setSaved(next);
     localStorage.setItem(STORE_KEY,JSON.stringify(next));
   };
   const loadEntry=s=>{
-    setKey(s.key); setTempo(s.tempo); setFeel(s.feel||'straight');
+    const m=s.meter&&METERS[s.meter]?s.meter:'4/4'; // legacy saves are 4/4
+    setKey(s.key); setMeter(m); setTempo(s.tempo);
+    setFeel(s.feel==='shuffle'&&METERS[m].swing?'shuffle':'straight');
     if (s.sections) {
       setSections({A:s.sections.A||[],B:s.sections.B||[],C:s.sections.C||[]});
       setArrangement(s.arrangement?.length?s.arrangement:['A']);
@@ -721,8 +919,14 @@ export default function Player() {
       setArrangement(['A']);
     }
     setActiveSec('A'); setPins(s.pins||{}); setPosIdx(0);
-    setStrum(s.strum&&STRUMS[s.strum]?s.strum:'folk'); setDrums(s.drums||'off'); setDrumFills(!!s.drumFills); setBassMode(s.bassMode||'off'); setLead(s.lead||'off'); setKeys(s.keys||'off');
-    setGenre(s.genre&&PROGRESSIONS[s.genre]?s.genre:DEFAULT_GENRE.key);
+    setStrum(s.strum&&STRUMS[s.strum]?.p[m]?s.strum:'folk');
+    setDrums(s.drums&&s.drums!=='off'?(DRUM_PATTERNS[s.drums]?.[m]?s.drums:'kit'):'off');
+    setDrumFills(!!s.drumFills);
+    setBassMode(s.bassMode&&s.bassMode!=='off'?(BASS_METERS[s.bassMode]?.includes(m)?s.bassMode:'root5'):'off');
+    setLead(s.lead||'off'); setKeys(s.keys||'off');
+    const gk=s.genre&&PROGRESSIONS[s.genre]?s.genre:DEFAULT_GENRE.key;
+    setGenre(gk);
+    setGenreTab(GENRES.find(g=>g.key===gk)?.group||DEFAULT_GENRE.group);
     setSaveName(s.name); setEditIdx(null);
   };
   const deleteEntry=name=>{
@@ -755,9 +959,24 @@ export default function Player() {
       </div>
 
       <div className="mb-4">
-        <label className="text-xs text-gray-400 uppercase tracking-wide mb-2 block">Genre <span className="normal-case text-gray-600">(sets tempo, feel, strum &amp; band)</span></label>
+        <label className="text-xs text-gray-400 uppercase tracking-wide mb-2 block">Genre <span className="normal-case text-gray-600">(pick a style to set meter, tempo, feel, strum &amp; band)</span></label>
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {GENRE_GROUPS.map(gr=>{
+            const holdsActive=GENRES.some(g=>g.group===gr&&g.key===genre);
+            return (
+              <button key={gr} onClick={()=>setGenreTab(gr)}
+                className={`px-3 py-1.5 rounded text-sm font-medium border transition-all ${genreTab===gr?'border-amber-500 text-amber-400 bg-gray-900':'border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-500'}`}>
+                {gr}{holdsActive&&genreTab!==gr?' •':''}
+              </button>
+            );
+          })}
+        </div>
         <div className="flex flex-wrap gap-1.5">
-          {GENRES.map(g=>(<button key={g.key} onClick={()=>applyGenre(g)} className={`px-3 py-1.5 rounded text-sm font-medium transition-all ${genre===g.key?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{g.label}</button>))}
+          {GENRES.filter(g=>g.group===genreTab).map(g=>(
+            <button key={g.key} onClick={()=>applyGenre(g)} className={`px-3 py-1.5 rounded text-sm font-medium transition-all ${genre===g.key?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>
+              {g.label}{g.meter&&g.meter!=='4/4'?<span className={genre===g.key?'text-gray-700':'text-gray-500'}> {g.meter}</span>:null}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -850,10 +1069,20 @@ export default function Player() {
           <input type="checkbox" checked={loop} onChange={e=>setLoop(e.target.checked)} className="accent-amber-500"/> Loop
         </label>
         <div className="flex items-center gap-1.5">
-          <span className="text-xs text-gray-500 uppercase tracking-wide">Feel</span>
-          {[['straight','Straight'],['shuffle','Shuffle']].map(([k,l])=>(
-            <button key={k} onClick={()=>setFeel(k)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${feel===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{l}</button>
+          <span className="text-xs text-gray-500 uppercase tracking-wide">Time</span>
+          {METER_KEYS.map(k=>(
+            <button key={k} onClick={()=>applyMeter(k)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${meter===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{METERS[k].label}</button>
           ))}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-gray-500 uppercase tracking-wide">Feel</span>
+          {[['straight','Straight'],['shuffle','Shuffle']].map(([k,l])=>{
+            const off=k==='shuffle'&&!METERS[meter].swing; // compound meters already swing
+            return (
+              <button key={k} onClick={()=>setFeel(k)} disabled={off} title={off?`${meter} is already triplet-based`:undefined}
+                className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${feel===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'} disabled:opacity-40 disabled:cursor-not-allowed`}>{l}</button>
+            );
+          })}
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-gray-500 uppercase tracking-wide">Guitar</span>
@@ -863,13 +1092,13 @@ export default function Player() {
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-gray-500 uppercase tracking-wide">Strum</span>
-          {Object.entries(STRUMS).map(([k,s])=>(
+          {Object.entries(STRUMS).filter(([,s])=>s.p[meter]).map(([k,s])=>(
             <button key={k} onClick={()=>setStrum(k)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${strum===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{s.label}</button>
           ))}
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-gray-500 uppercase tracking-wide">Drums</span>
-          {[['off','Off'],['stomp','Stomp'],['kit','Kit'],['train','Train'],['bossa','Bossa'],['swing','Swing'],['funk','Funk']].map(([k,l])=>(
+          {[['off','Off'],['stomp','Stomp'],['kit','Kit'],['train','Train'],['bossa','Bossa'],['swing','Swing'],['funk','Funk']].filter(([k])=>k==='off'||DRUM_PATTERNS[k][meter]).map(([k,l])=>(
             <button key={k} onClick={()=>setDrums(k)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${drums===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{l}</button>
           ))}
           {!['off','stomp'].includes(drums)&&(
@@ -878,7 +1107,7 @@ export default function Player() {
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-gray-500 uppercase tracking-wide">Bass</span>
-          {[['off','Off'],['root','Root'],['root5','Root–5th'],['walk','Walking'],['boogie','Boogie'],['bossa','Bossa'],['funk','Funk']].map(([k,l])=>(
+          {[['off','Off'],['root','Root'],['root5','Root–5th'],['walk','Walking'],['boogie','Boogie'],['bossa','Bossa'],['funk','Funk']].filter(([k])=>k==='off'||BASS_METERS[k].includes(meter)).map(([k,l])=>(
             <button key={k} onClick={()=>setBassMode(k)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${bassMode===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{l}</button>
           ))}
         </div>
@@ -1048,7 +1277,7 @@ export default function Player() {
       </div>
 
       <div className="mt-6 text-xs text-gray-600 border-t border-gray-800 pt-4">
-        <p><strong className="text-gray-500">How to use:</strong> Pick a genre, then one of its iconic progressions — or click any bar to edit its chord, and + to add bars. Songs can have up to three <strong>sections</strong> (Verse/Chorus/Bridge tabs above the bars): switch to an empty tab and pick a progression (or add bars) to fill it, then build the <strong>Arrangement</strong> with the + chips — playback runs the whole arrangement as one loop, voice-leading flows across section boundaries, and the sounding section's chip lights up. Saved progressions keep their sections, arrangement, and pinned voicings. Switching genre loads that genre's first progression along with its sound — pick another from the list (<strong>More…</strong> opens the genre's full catalog with numerals and bar counts) or edit the bars from there. Cowboy chords shows the simplest first-position grip for each bar; Triads shows a voice-led triad path on your chosen string set — or, with String Set on <strong>Auto</strong> (the default), across sets: each bar picks the voicing that moves pitches and your hand the least, crossing between 3-2-1, 4-3-2, and 5-4-3 the way real position playing does (each bar's card names its set). <strong>Position</strong> controls where the path sits on the neck. <strong>Loop the neck</strong> (the default) plays the progression once per position, climbing up and back down, changing exactly on the loop boundary — the diagrams and the counter follow along, so you can ride the whole neck hands-free; the numbered chips choose which positions the climb visits (e.g. just 1–2 while you're learning the low half). While climbing, a dashed "next loop" card at the end of the grid shows where bar 1 lands on the next pass, pulsing through the final bar — that's your cue for where the hand goes. <strong>Manual</strong> parks it in one position with ▼/▲ steppers. Either way the improvised Lead follows the position, since its notes come from each bar's voicing. To bend the path at one spot, click a bar and pick a <strong>Voicing</strong>: that bar is pinned (marked on its card) and later bars re-lead from it; Auto unpins. Everything is live while it plays — tempo, key, band, even switching progressions — playback carries on from the same beat. The <strong>View</strong> and the <strong>Guitar</strong> sound are independent, and you can switch views while it plays: watch the triads while the guitar strums cowboy chords to follow along, set Guitar to Triads to hear what the triads should sound like, or mute it and play the triads yourself over the rhythm section. A <strong>Genre</strong> button sets tempo, feel, strum pattern, and the band in one tap — every knob stays individually adjustable after. Some progressions also pin part of the band to fit their character (Cabbage locks in the driving boom-chick and alternating bass); knobs a progression doesn't pin keep your current settings. Strums: Folk is D-DU-UDU; Boom-chick picks the bass note on 1 and 3 and strums the top strings on 2 and 4 (old-time rhythm guitar); Bluegrass adds upstroke fills to the boom-chick; Lo-fi is sparse and lazy (it doubles as jazz comping); Pop is driving eighths; Travis fakes fingerpicking — thumb bass on every beat, soft finger picks between; Bossa is the syncopated bossa comp; Funk is scratchy off-beat sixteenths. Drums: Stomp (foot-tap), Kit (kick/snare/hats), Train (brushes with a backbeat), Bossa (rim clicks over hats), Swing (ride pattern with feathered kick — pair with Shuffle), Funk (syncopated kick, ghost snares); the Fills toggle throws a snare/tom run into every 4th bar, different each time Play builds the loop. Keys adds an upright piano comping block chords on each bar; Comp + Fills also sprinkles a chord-tone run into every 4th bar, new each time Play builds the loop. Bass patterns: Root, Root–5th, Walking (with chromatic approaches), Boogie (the swung R-3-5-6 shuffle line), Bossa (dotted root–fifth), or Funk (syncopated with octave pops) — played on an upright or an electric (the Mixer's bass Samples switch; Pop, Indie Pop, and Funk preset the electric). The Mixer's guitar Samples switch likewise offers three acoustics and two electrics (E.Jazz hollowbody-ish, E.Muted for funk scratch). Shuffle swings the offbeat strums and hats onto the triplet grid (the blues preset selects it automatically). Lead improvises pentatonic notes drawn from each bar's triad position on the selected string set — Fills plays a run into every 4th bar, Solo noodles throughout; each press of Play writes a new solo, and it loops as played. The lead also rolls guitar articulations as it goes: bends into strong beats and fill endings, hammer-on/pull-off legato on quick close steps, and the occasional double stop. Saved progressions live in your browser.</p>
+        <p><strong className="text-gray-500">How to use:</strong> Pick a genre tab, then a style, then one of its iconic progressions — or click any bar to edit its chord, and + to add bars. Songs can have up to three <strong>sections</strong> (Verse/Chorus/Bridge tabs above the bars): switch to an empty tab and pick a progression (or add bars) to fill it, then build the <strong>Arrangement</strong> with the + chips — playback runs the whole arrangement as one loop, voice-leading flows across section boundaries, and the sounding section's chip lights up. Saved progressions keep their sections, arrangement, and pinned voicings. Switching style loads that style's first progression along with its sound — pick another from the list (<strong>More…</strong> opens the genre's full catalog with numerals and bar counts) or edit the bars from there. Cowboy chords shows the simplest first-position grip for each bar; Triads shows a voice-led triad path on your chosen string set — or, with String Set on <strong>Auto</strong> (the default), across sets: each bar picks the voicing that moves pitches and your hand the least, crossing between 3-2-1, 4-3-2, and 5-4-3 the way real position playing does (each bar's card names its set). <strong>Position</strong> controls where the path sits on the neck. <strong>Loop the neck</strong> (the default) plays the progression once per position, climbing up and back down, changing exactly on the loop boundary — the diagrams and the counter follow along, so you can ride the whole neck hands-free; the numbered chips choose which positions the climb visits (e.g. just 1–2 while you're learning the low half). While climbing, a dashed "next loop" card at the end of the grid shows where bar 1 lands on the next pass, pulsing through the final bar — that's your cue for where the hand goes. <strong>Manual</strong> parks it in one position with ▼/▲ steppers. Either way the improvised Lead follows the position, since its notes come from each bar's voicing. To bend the path at one spot, click a bar and pick a <strong>Voicing</strong>: that bar is pinned (marked on its card) and later bars re-lead from it; Auto unpins. Everything is live while it plays — tempo, key, band, even switching progressions — playback carries on from the same beat. The <strong>View</strong> and the <strong>Guitar</strong> sound are independent, and you can switch views while it plays: watch the triads while the guitar strums cowboy chords to follow along, set Guitar to Triads to hear what the triads should sound like, or mute it and play the triads yourself over the rhythm section. A <strong>Style</strong> button sets time signature, tempo, feel, strum pattern, and the band in one tap — every knob stays individually adjustable after. <strong>Time</strong> switches the meter by hand: 4/4, 3/4 (waltz), or 6/8 (compound — two pulses of three, the slow-blues feel). Strums, drums, and bass lines are written per meter, so the rows only show patterns that exist in the current one; switching meter pulls any knob that doesn't fit back to one that does (strum to Folk, drums to Kit, bass to Root–5th). Shuffle is disabled in 6/8 since the meter is already triplet-based. Some progressions also pin part of the band to fit their character (Cabbage locks in the driving boom-chick and alternating bass); knobs a progression doesn't pin keep your current settings. Strums: Folk is D-DU-UDU; Boom-chick picks the bass note on 1 and 3 and strums the top strings on 2 and 4 (old-time rhythm guitar); Bluegrass adds upstroke fills to the boom-chick; Lo-fi is sparse and lazy (it doubles as jazz comping); Pop is driving eighths; Travis fakes fingerpicking — thumb bass on every beat, soft finger picks between; Bossa is the syncopated bossa comp; Funk is scratchy off-beat sixteenths. Drums: Stomp (foot-tap), Kit (kick/snare/hats), Train (brushes with a backbeat), Bossa (rim clicks over hats), Swing (ride pattern with feathered kick — pair with Shuffle), Funk (syncopated kick, ghost snares); the Fills toggle throws a snare/tom run into every 4th bar, different each time Play builds the loop. Keys adds an upright piano comping block chords on each bar; Comp + Fills also sprinkles a chord-tone run into every 4th bar, new each time Play builds the loop. Bass patterns: Root, Root–5th, Walking (with chromatic approaches), Boogie (the swung R-3-5-6 shuffle line), Bossa (dotted root–fifth), or Funk (syncopated with octave pops) — played on an upright or an electric (the Mixer's bass Samples switch; Pop, Indie Pop, and Funk preset the electric). The Mixer's guitar Samples switch likewise offers three acoustics and two electrics (E.Jazz hollowbody-ish, E.Muted for funk scratch). Shuffle swings the offbeat strums and hats onto the triplet grid (the blues preset selects it automatically). Lead improvises pentatonic notes drawn from each bar's triad position on the selected string set — Fills plays a run into every 4th bar, Solo noodles throughout; each press of Play writes a new solo, and it loops as played. The lead also rolls guitar articulations as it goes: bends into strong beats and fill endings, hammer-on/pull-off legato on quick close steps, and the occasional double stop. Saved progressions live in your browser.</p>
         <p className="mt-2">Sounds: guitar from the <a href="https://github.com/gleitz/midi-js-soundfonts" className="underline hover:text-gray-400">FatBoy SoundFont</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/" className="underline hover:text-gray-400">CC BY-SA 3.0</a>); upright bass from <a href="https://github.com/sfzinstruments/karoryfer.meatbass" className="underline hover:text-gray-400">Meatbass</a> and electric bass from <a href="https://github.com/sfzinstruments/karoryfer.black-and-blue-basses" className="underline hover:text-gray-400">Black And Blue Basses</a>, both by Karoryfer Samples (CC0); drums from the <a href="https://archive.org/details/SalamanderDrumkit" className="underline hover:text-gray-400">Salamander Drumkit</a> by Alexander Holm (public domain); brushes from <a href="https://shop.karoryfer.com/pages/free-samples" className="underline hover:text-gray-400">Swirly Drums</a> by Karoryfer Samples (CC0); upright piano from the <a href="https://github.com/sgossner/VCSL" className="underline hover:text-gray-400">Versilian Community Sample Library</a> (CC0).</p>
       </div>
     </div>
