@@ -5,6 +5,13 @@
 ## Revision log
 
 - **2026-07-10 20:18 CDT** — Initial version; implemented in the same session.
+- **2026-07-10 ~21:30 CDT** — Tuning infrastructure: audio transition fixes
+  (cancelPending for seamless live rebuilds, deeper stopAll fade, master
+  limiter, 450ms scheduling horizon); per-style `mix` volume multipliers on
+  GENRES + "Copy style" button + `bake-style` project skill for baking Tim's
+  ear-tuned settings; measured per-sample-set loudness trims (`SET_TRIM` in
+  audio.js — Fluid −4dB, E.Jazz +1.2dB, E.Muted +4dB compromise) and
+  provisional per-style mixes pending Tim's one-by-one ear passes.
 
 ## Context
 

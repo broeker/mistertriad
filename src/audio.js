@@ -42,7 +42,13 @@ function getBus() {
   const comp = c.createDynamicsCompressor();
   comp.threshold.value = -16; comp.knee.value = 18; comp.ratio.value = 3;
   comp.attack.value = 0.004; comp.release.value = 0.22;
-  master.connect(comp); comp.connect(c.destination);
+  // Brickwall safety limiter: the leveler above only has ratio 3, so dense
+  // tuttis (kit + keys + lead + strums) could still clip the destination —
+  // which sounds like crackling on loud bars, worse at high channel volumes.
+  const lim = c.createDynamicsCompressor();
+  lim.threshold.value = -2; lim.knee.value = 0; lim.ratio.value = 20;
+  lim.attack.value = 0.001; lim.release.value = 0.1;
+  master.connect(comp); comp.connect(lim); lim.connect(c.destination);
 
   // Small-room reverb: synthetic exponentially-decaying noise IR, darkening
   // toward the tail. No license baggage and cheap to generate.
@@ -136,13 +142,16 @@ const BASE = `${import.meta.env.BASE_URL}samples/`;
 
 // Alternate sample sets: guitar folders are flat per-note; bass folders are
 // manifest-driven. Switching just remaps the instrument to another folder.
-export const GUITAR_SETS = { musyng:'guitar', fluid:'guitar-fluid', fatboy:'guitar-fatboy', nylon:'guitar-nylon', jazz:'guitar-jazz', muted:'guitar-muted' };
+export const GUITAR_SETS = { musyng:'guitar', fluid:'guitar-fluid', fatboy:'guitar-fatboy', nylon:'guitar-nylon', jazz:'guitar-jazz', muted:'guitar-muted', black:'guitar-black', green:'guitar-green' };
 export const BASS_SETS = { upright:'bass', electric:'bass-electric' };
+export const PIANO_SETS = { vcsl:'piano', osiris:'piano-osiris' };
 let guitarFolder = GUITAR_SETS.fatboy;
 let bassFolder = BASS_SETS.upright;
+let pianoFolder = PIANO_SETS.vcsl;
 export function setGuitarSet(key) { guitarFolder = GUITAR_SETS[key] || GUITAR_SETS.fatboy; }
 export function setBassSet(key) { bassFolder = BASS_SETS[key] || BASS_SETS.upright; }
-const folderOf = inst => inst === 'guitar' ? guitarFolder : inst === 'bass' ? bassFolder : inst;
+export function setPianoSet(key) { pianoFolder = PIANO_SETS[key] || PIANO_SETS.vcsl; }
+const folderOf = inst => inst === 'guitar' ? guitarFolder : inst === 'bass' ? bassFolder : inst === 'piano' ? pianoFolder : inst;
 
 function decode(key, url) {
   if (!loading.has(key)) {
@@ -241,14 +250,30 @@ function startBuf(buf, when, gain, dest, rate = 1, art) {
     g.gain.value = gain;
     src.start(when);
   }
-  const entry = { src, g };
+  const entry = { src, g, when };
   active.add(entry);
   src.onended = () => active.delete(entry);
   return entry;
 }
 
+// Per-set loudness trims, measured 2026-07-10 as attack RMS (first 250ms,
+// eight notes E2–D5) relative to FatBoy, the default set the mixer was tuned
+// against. Fluid ran ~4dB hot; E.Jazz ~1dB quiet; E.Muted sat -6.7dB RMS but
+// its peaks already match FatBoy (it's pure attack), so full RMS matching
+// would make the transients jump — 1.6 is the compromise. The two bass sets
+// measured within 0.7dB of each other, so no trim. Applied after
+// velocity-layer selection so leveling never changes which sample plays.
+const SET_TRIM = {
+  'guitar':1, 'guitar-fluid':0.63, 'guitar-fatboy':1, 'guitar-nylon':1,
+  'guitar-jazz':1.15, 'guitar-muted':1.6,
+  'guitar-black':0.45, 'guitar-green':0.9, // B&G import, measured vs FatBoy 2026-07-10
+  'bass':1, 'bass-electric':1,
+  'piano':1, 'piano-osiris':1.2,            // measured vs VCSL 2026-07-10
+};
+
 function startNote(midi, when, gain, inst, dest, art) {
   const d = folderOf(inst);
+  const trim = SET_TRIM[d] ?? 1;
   const man = manifestData.get(d);
   if (man) {
     const root = nearestRoot(man, midi);
@@ -257,11 +282,11 @@ function startNote(midi, when, gain, inst, dest, art) {
     const file = pick(layers[layerIndex(gain, layers.length)]);
     const buf = decoded.get(`${d}/${file}`);
     if (!buf) return null;
-    return startBuf(buf, when, gain, dest, Math.pow(2, (midi - root) / 12), art);
+    return startBuf(buf, when, gain * trim, dest, Math.pow(2, (midi - root) / 12), art);
   }
   const buf = decoded.get(`${d}:${midi}`);
   if (!buf) return null;
-  return startBuf(buf, when, gain, dest, 1, art);
+  return startBuf(buf, when, gain * trim, dest, 1, art);
 }
 
 /* ---------- Musical scheduling ---------- */
@@ -366,7 +391,7 @@ function noiseBurst(when, dur, freq, type, gain) {
   g.gain.exponentialRampToValueAtTime(0.001, when+dur);
   src.connect(f); f.connect(g); g.connect(getBus().drums.in);
   src.start(when); src.stop(when+dur+0.02);
-  const entry = { src, g };
+  const entry = { src, g, when };
   active.add(entry);
   src.onended = () => active.delete(entry);
 }
@@ -381,7 +406,7 @@ function thump(when, f0, f1, dur, gain) {
   g.gain.exponentialRampToValueAtTime(0.001, when+dur);
   o.connect(g); g.connect(getBus().drums.in);
   o.start(when); o.stop(when+dur+0.05);
-  const entry = { src: o, g };
+  const entry = { src: o, g, when };
   active.add(entry);
   o.onended = () => active.delete(entry);
 }
@@ -413,14 +438,36 @@ export function scheduleDrum(kind, when, gain=1) {
 
 /* ---------- Global control ---------- */
 
-// Fade out everything sounding or scheduled.
+// Cancel sources that haven't started sounding yet — click-free by
+// definition, since they're still silent — and leave ringing notes to decay.
+// Live rebuilds use this instead of stopAll: the per-slot re-strike damping
+// in scheduleStrum/Bass/Piano/Lead fades the old notes when the new
+// schedule's next hit lands on the same slot, so settings changes mid-play
+// are seamless (no gap, no cut). slotLast is kept for exactly that reason.
+export function cancelPending() {
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  for (const entry of active) {
+    if (entry.when > now + 0.005) {
+      try { entry.src.stop(); } catch { /* already stopped */ }
+      active.delete(entry);
+    }
+  }
+}
+
+// Fade out everything sounding or scheduled (the Stop button / one-off strum).
+// Pending sources are killed silently; sounding ones fade with a time constant
+// short enough to feel immediate but a stop point ~13τ out, so the residual at
+// the hard cut is ~-110dB — the old 0.13s stop left ~-42dB, an audible click
+// when a full band was cut at once.
 export function stopAll(fade=0.08) {
   if (!ctx) return;
   const now = ctx.currentTime;
-  for (const { src, g } of active) {
+  for (const { src, g, when } of active) {
     try {
-      g.gain.setTargetAtTime(0, now, fade/3);
-      src.stop(now + fade + 0.05);
+      if (when > now + 0.005) { src.stop(); continue; }
+      g.gain.setTargetAtTime(0, now, fade/5);
+      src.stop(now + fade*2 + 0.05);
     } catch { /* already stopped */ }
   }
   active = new Set();
