@@ -35,6 +35,9 @@
   Guitars (E.Black/E.Green) and Osiris Piano, with a new piano Samples
   switcher (`PIANO_SETS`), measured SET_TRIM entries, footer credits, and
   `pianoInst` support in genres/Copy style/bake-style.
+- **2026-07-10 ~23:40 CDT** — Osiris verdict: Tim not sold; VCSL stays
+  default. Imported queue #3 and #4: Shinyguitar (E.Shiny) and ganjo
+  (Banjo), trims measured, credits added.
 
 ## Current inventory
 
@@ -201,6 +204,11 @@ The trick: most of these ride an **existing channel** as an alternative
 sample set — much cheaper than a new band member. The channel's patterns
 already speak the instrument's language.
 
+*(2026-07-11: the "second rhythm instrument" slot is now real — the
+**Backup channel** shipped with banjo Roll/Chop patterns; Bluegrass defaults
+to Roll. Mandolin/accordion below now route through `BACKUP_SETS` — each is
+a sample import + a chip + possibly a pattern.)*
+
 | Idea | Source / license | Integration path | Cost | Styles it serves |
 |---|---|---|---|---|
 | **Punk tuba bass** | Karoryfer War Tuba (CC0, 1000+ samples) | `BASS_SETS.tuba` — bass patterns (root, root–5th, walkup fills) are exactly what oompah tuba plays | cheap import | Old-Time gets hilarious/great; future Polka/2-4 styles |
@@ -231,9 +239,15 @@ shop.karoryfer.com/pages/free-samples is affected.)*
    Tim's first listen (2026-07-10): "awesome" (along with the electric bass).
 2. ~~Osiris Piano~~ **IMPORTED 2026-07-10** → `piano-osiris` (Osiris in the
    Mixer's new piano Samples row). UC set, Mic A, 29 roots × 2 vel layers,
-   1.6 MB, trim 1.2. VCSL stays the default pending Tim's bake-off.
-3. Shinyguitar → audition vs Black And Green for Jazz
-4. ganjo → banjo-timbre guitar set for Old-Time / Bluegrass
+   1.6 MB, trim 1.2. VCSL stays the default — Tim not sold on Osiris after
+   in-app A/B (2026-07-10); available per-style via `pianoInst` where it wins.
+3. ~~Shinyguitar~~ **IMPORTED 2026-07-10** → `guitar-shiny` (E.Shiny).
+   Electric variant, native sparse roots 37–81, vl2–4 × 3 RRs, 3.4 MB,
+   trim 0.22. Acoustic variant parked in the zip.
+4. ~~ganjo~~ **IMPORTED 2026-07-10** → `guitar-ganjo` (Banjo). Single
+   layer, filename RRs, roots 39–68 (152 KB!), trim 0.11. High positions
+   above sounding MIDI 71 retune-stretch from the top root — acceptable
+   for plinky banjo, revisit if it grates.
 5. Virtuosity Drums → kit/ride upgrade (needs drum-manifest work, not just notes)
 6. (audition pool) Blue Jeans And Moonbeams, DamiensFunkyGuitar (license
    check first), Salamander Grand / Upright KW / Old Piano FB (piano
