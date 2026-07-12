@@ -13,7 +13,8 @@ defaults so the style sounds tuned for everyone, from a fresh browser.
 ## Where defaults live
 
 - `src/Player.jsx` → `GENRES`: one entry per style — `meter, tempo, feel,
-  strum, drums, drumFills, bass, bassFills, lead, leadEvery, keys`, optional
+  strum, drums, drumFills, bass, bassFills, backup, lead, leadEvery, keys`
+  (`backup` is `off|roll|chop`, omit when off), optional
   `guitarInst`/`bassInst`/`pianoInst` (omit when they'd be the defaults
   `fatboy`/`upright`/`vcsl`), optional `mix:{channel:multiplier}`. Omit
   `bassFills` when false and `leadEvery` when 4 — those are the defaults.

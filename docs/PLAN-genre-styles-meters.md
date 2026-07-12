@@ -12,6 +12,13 @@
   ear-tuned settings; measured per-sample-set loudness trims (`SET_TRIM` in
   audio.js — Fluid −4dB, E.Jazz +1.2dB, E.Muted +4dB compromise) and
   provisional per-style mixes pending Tim's one-by-one ear passes.
+- **2026-07-11 ~00:15 CDT** — Backup channel: sixth mixer channel (banjo
+  Roll/Chop patterns per meter over each bar's chord), Bluegrass defaults to
+  Roll; guitar-and-banjo now play together.
+- **2026-07-11 ~23:45 CDT** — Genre tab click now resets to that genre's
+  first style and progression (via `applyGenreTab` → `applyGenre`) instead of
+  just browsing; re-clicking the current tab is a no-op; the "active style on
+  another tab" • dot removed as unreachable.
 
 ## Context
 

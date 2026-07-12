@@ -96,6 +96,7 @@ function getBus() {
     bass:   strip({ pan: 0,    hp:34, lp:3200 }),
     drums:  strip({ pan: 0.08 }),
     piano:  strip({ pan: 0.12, hp:60 }),
+    backup: strip({ pan:-0.3,  hp:120 }), // rolls sit high; panned opposite the lead
   };
   applySettings();
   return bus;
@@ -113,9 +114,10 @@ export const AUDIO_DEFAULTS = {
   drums:  { vol:0.55, send:0.10, low:4, high:0 },
   lead:   { vol:1.5,  send:0.28, low:0, high:10 },
   piano:  { vol:0.9,  send:0.25, low:0, high:0 },
+  backup: { vol:0.7,  send:0.15, low:0, high:2 },
 };
 
-const MIX_KEYS = ['guitar','bass','drums','lead','piano'];
+const MIX_KEYS = ['guitar','bass','drums','lead','piano','backup'];
 let settings = JSON.parse(JSON.stringify(AUDIO_DEFAULTS));
 let mix = {}; // per-progression multipliers on top of the tuned volumes
 
@@ -142,16 +144,21 @@ const BASE = `${import.meta.env.BASE_URL}samples/`;
 
 // Alternate sample sets: guitar folders are flat per-note; bass folders are
 // manifest-driven. Switching just remaps the instrument to another folder.
-export const GUITAR_SETS = { musyng:'guitar', fluid:'guitar-fluid', fatboy:'guitar-fatboy', nylon:'guitar-nylon', jazz:'guitar-jazz', muted:'guitar-muted', black:'guitar-black', green:'guitar-green' };
+export const GUITAR_SETS = { musyng:'guitar', fluid:'guitar-fluid', fatboy:'guitar-fatboy', nylon:'guitar-nylon', jazz:'guitar-jazz', muted:'guitar-muted', black:'guitar-black', green:'guitar-green', shiny:'guitar-shiny', ganjo:'guitar-ganjo' };
 export const BASS_SETS = { upright:'bass', electric:'bass-electric' };
 export const PIANO_SETS = { vcsl:'piano', osiris:'piano-osiris' };
+// The Backup channel's instrument (a second rhythm voice over the guitar).
+// Single set today; mandolin/accordion later are a folder + one chip.
+export const BACKUP_SETS = { banjo:'guitar-ganjo' };
 let guitarFolder = GUITAR_SETS.fatboy;
 let bassFolder = BASS_SETS.upright;
 let pianoFolder = PIANO_SETS.vcsl;
+let backupFolder = BACKUP_SETS.banjo;
 export function setGuitarSet(key) { guitarFolder = GUITAR_SETS[key] || GUITAR_SETS.fatboy; }
 export function setBassSet(key) { bassFolder = BASS_SETS[key] || BASS_SETS.upright; }
 export function setPianoSet(key) { pianoFolder = PIANO_SETS[key] || PIANO_SETS.vcsl; }
-const folderOf = inst => inst === 'guitar' ? guitarFolder : inst === 'bass' ? bassFolder : inst === 'piano' ? pianoFolder : inst;
+export function setBackupSet(key) { backupFolder = BACKUP_SETS[key] || BACKUP_SETS.banjo; }
+const folderOf = inst => inst === 'guitar' ? guitarFolder : inst === 'bass' ? bassFolder : inst === 'piano' ? pianoFolder : inst === 'backup' ? backupFolder : inst;
 
 function decode(key, url) {
   if (!loading.has(key)) {
@@ -267,6 +274,7 @@ const SET_TRIM = {
   'guitar':1, 'guitar-fluid':0.63, 'guitar-fatboy':1, 'guitar-nylon':1,
   'guitar-jazz':1.15, 'guitar-muted':1.6,
   'guitar-black':0.45, 'guitar-green':0.9, // B&G import, measured vs FatBoy 2026-07-10
+  'guitar-shiny':0.22, 'guitar-ganjo':0.11, // mastered near full scale; measured 2026-07-10
   'bass':1, 'bass-electric':1,
   'piano':1, 'piano-osiris':1.2,            // measured vs VCSL 2026-07-10
 };
@@ -364,6 +372,16 @@ export function scheduleLead(midi, when, gain=0.6, art) {
     if (e) entries.push({ ...e, t: when });
   }
   slotLast.set('lead', entries);
+}
+
+// Backup rhythm instrument (banjo rolls / chop stabs). Roll notes ring out
+// on the sample's own short decay; chop damps the voice right after the
+// attack for the muted-stab sound.
+export function scheduleBackup(midi, when, gain=0.7, { chop=false } = {}) {
+  const entry = startNote(midi, when, gain, 'backup', getBus().backup);
+  if (entry && chop) {
+    try { entry.g.gain.setTargetAtTime(0, when + 0.09, 0.03); } catch { /* ended */ }
+  }
 }
 
 /* ---------- Drums: sampled kit with synth fallback ---------- */
