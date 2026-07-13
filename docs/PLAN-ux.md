@@ -6,6 +6,16 @@
 
 - **2026-07-12 17:35 CDT** — Initial plan from UX review session (full-page screenshot of dev build).
 - **2026-07-12 17:40 CDT** — Step 1 shipped: `practice` state hides everything but a sticky transport (Play/Loop/tempo/Fullscreen/Exit) and the chart card; diagrams scale up via CSS (`[&_svg]:w-56`, wider cards, larger chord names); screen wake lock while playing or practicing, re-acquired on visibilitychange; fullscreen toggle. Verified in browser both directions.
+- **2026-07-12 21:30 CDT** — Section suggestions ("Suggest a chorus/bridge…")
+  shipped for Country + Blues genres. Curated degree-based catalogs
+  (`COUNTRY_IDEAS`/`BLUES_IDEAS` → `SECTION_IDEAS`) named after public-domain
+  classics; a ✨ Suggest button appears on empty Chorus/Bridge tabs and opens a
+  ranked card panel (rank: ends on V pulls back to the verse +2, bridge opens
+  on a different chord than the verse +2, pass-aligned bar count +1). Applying
+  fills the section and clears its pins, same as picking an iconic
+  progression. Also fixed Bob Wills: bare `[1]` played II major (toBars
+  defaults quality to maj) — now `[1,'min']`. Other genre groups show no
+  button until their catalogs are curated.
 - **2026-07-12 20:15 CDT** — "Vary" position mode shipped (magic mode, Option
   A). Third mode alongside Loop the neck / Manual: holds one position (picked
   with the ▼/▲ steppers) and plays one pass per same-position shape — bar 1
@@ -98,6 +108,28 @@ One feature covering both "hide everything but charts" and "fullscreen":
 All render-layer; no audio or scheduling logic changes.
 
 ## Out of scope (parked)
+
+- **Offline mode (service worker).** The PWA is installable (manifest + icons)
+  but has no service worker, so the app shell and samples need network —
+  playing on an iPad away from wifi fails once uncached samples are requested.
+  Sketch: precache the app shell (index/JS/CSS/icons) on install;
+  cache-first + background-refresh for `samples/**` so any sample set that
+  has been *played once* works offline thereafter (full precache of all sets
+  is too heavy — Strum Machine gates offline for the same reason). Optionally
+  a "download this band" button that warms the cache for the current
+  guitar/bass/piano/drum sets. Vite plugin `vite-plugin-pwa` (Workbox) fits
+  the existing build; test the GitHub Pages `/mistertriad/` base path
+  carefully. Add a small "offline ready / needs network" indicator near the
+  transport.
+
+- **Guitar tab export** (rhythm + generated fills/solos). Rhythm is pure
+  rendering (grips/triadPath store string+fret; strums are beat-placed with
+  direction/span). Lead needs the generator to record {string, fret, beat,
+  articulation} instead of discarding them to MIDI (`leadPool` builds notes
+  from string+fret already) — then the tab is a faithful "as played"
+  transcript of the current loop's solo, one block per pass in climb/vary.
+  Start with ASCII tab; VexFlow/alphaTab only if engraving is ever wanted.
+  Bass/banjo tab extends the same way.
 
 - Split-bar support (2 chords per bar) for authentic turnarounds — separate
   project touching bar model, editor, grid, scheduler.

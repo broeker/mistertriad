@@ -24,7 +24,7 @@ const PROGRESSIONS = {
     { name:'Classic + Turnaround (I–VI7–II7–V7)', bars:[[0],[3],[4],[0],[0],[5,'7'],[1,'7'],[4,'7']] },
     { name:'Hank (I–IV–V–vi)', bars:[[0],[3],[4],[5,'min'],[0],[3],[4],[5,'min']] },
     { name:'Hank + Turnaround (I–VI7–II7–V7)', bars:[[0],[3],[4],[5,'min'],[0],[5,'7'],[1,'7'],[4,'7']] },
-    { name:'Bob Wills (I–VI7–ii–V7)', bars:[[0],[5,'7'],[1],[4,'7'],[0],[5,'7'],[1],[4,'7']] },
+    { name:'Bob Wills (I–VI7–ii–V7)', bars:[[0],[5,'7'],[1,'min'],[4,'7'],[0],[5,'7'],[1,'min'],[4,'7']] },
     { name:'Cabbage (I–IV–I–V)', bars:[[0],[3],[0],[4],[0],[3],[4],[0]],
       set:{ tempo:112, strum:'boomchick', drums:'train', bass:'root5' } },
     { name:'I–iii–IV–V–I–iii–I–V', bars:[[0],[2,'min'],[3],[4],[0],[2,'min'],[0],[4]] },
@@ -440,6 +440,39 @@ function leadArt(pool, idx, prevMidi, b, fillEnd) {
 const SECTION_IDS=['A','B','C'];
 const SECTION_LABELS={A:'Verse',B:'Chorus',C:'Bridge'};
 
+/* ---- Suggested choruses/bridges (the Suggest button on empty sections) ----
+   Degree-based like PROGRESSIONS. The forms are the tradition's common section
+   moves; names cite public-domain classics that made them famous (chord
+   progressions themselves aren't copyrightable — the names are the lesson). */
+const COUNTRY_IDEAS={
+  chorus:[
+    { name:'Circle (Will the Circle Be Unbroken)', bars:[[0],[0],[3],[0],[0],[0],[4],[0]] },
+    { name:'Lifted (starts on IV)', bars:[[3],[3],[0],[0],[3],[0],[4],[0]] },
+    { name:'Willow (Bury Me Beneath the Willow)', bars:[[0],[3],[0],[4],[0],[3],[4],[0]] },
+  ],
+  bridge:[
+    { name:'Middle Eight (IV opener)', bars:[[3],[3],[0],[0],[3],[3],[4],[4,'7']] },
+    { name:'Rhythm Bridge (I Got Rhythm, 1930)', bars:[[2,'7'],[2,'7'],[5,'7'],[5,'7'],[1,'7'],[1,'7'],[4,'7'],[4,'7']] },
+    { name:'Relative Minor (vi opener)', bars:[[5,'min'],[3],[0],[4],[5,'min'],[3],[4],[4,'7']] },
+    { name:'V-of-V (II7 bridge)', bars:[[0],[0],[1,'7'],[1,'7'],[4],[4],[4,'7'],[4,'7']] },
+  ],
+};
+const BLUES_IDEAS={
+  chorus:[
+    { name:'Quick-Change 12-Bar', bars:[[0,'7'],[3,'7'],[0,'7'],[0,'7'],[3,'7'],[3,'7'],[0,'7'],[0,'7'],[4,'7'],[3,'7'],[0,'7'],[4,'7']] },
+    { name:'Eight-Bar (Highway form)', bars:[[0,'7'],[4,'7'],[3,'7'],[3,'7'],[0,'7'],[4,'7'],[0,'7'],[4,'7']] },
+  ],
+  bridge:[
+    { name:'IV Vamp', bars:[[3,'7'],[3,'7'],[0,'7'],[0,'7'],[3,'7'],[3,'7'],[4,'7'],[4,'7']] },
+    { name:'Minor Plagal (iv drop)', bars:[[3],[3,'min'],[0],[0],[3],[3,'min'],[4,'7'],[4,'7']] },
+    { name:'Rhythm Bridge (I Got Rhythm, 1930)', bars:[[2,'7'],[2,'7'],[5,'7'],[5,'7'],[1,'7'],[1,'7'],[4,'7'],[4,'7']] },
+  ],
+};
+const SECTION_IDEAS={
+  oldtime:COUNTRY_IDEAS, bluegrass:COUNTRY_IDEAS, honkytonk:COUNTRY_IDEAS, altcountry:COUNTRY_IDEAS, countrywaltz:COUNTRY_IDEAS,
+  blues:BLUES_IDEAS, piedmont:BLUES_IDEAS, slowblues:BLUES_IDEAS,
+};
+
 const STORE_KEY = 'mrtriad.savedProgressions';
 const loadSaved = () => { try { return JSON.parse(localStorage.getItem(STORE_KEY))||[]; } catch { return []; } };
 
@@ -512,6 +545,7 @@ export default function Player() {
   const [showMixer,setShowMixer]=useState(false);
   const [practice,setPractice]=useState(false); // charts-only performance view
   const [pickIdx,setPickIdx]=useState(null); // bar whose voicing-picker popover is open (triads view)
+  const [suggestOpen,setSuggestOpen]=useState(false); // chorus/bridge suggestions for the empty active section
   const [bandOpen,setBandOpen]=useState(false); // band chip rows are override detail; genre sets them all
   const [guitarSet,setGuitarSet]=useState(()=>localStorage.getItem('mrtriad.guitarSet')||DEFAULT_GENRE.guitarInst||'fatboy');
   const [bassSet,setBassSet]=useState(()=>localStorage.getItem('mrtriad.bassSet')||DEFAULT_GENRE.bassInst||'upright');
@@ -995,6 +1029,13 @@ export default function Player() {
     setMix(s.mix??(g||GENRES.find(x=>x.key===genre))?.mix);
   };
 
+  // Fills the active (empty) section with a suggested chorus/bridge.
+  const applyIdea=p=>{
+    setSectionBars(activeSec,toBars(p.bars));
+    setPins(ps=>Object.fromEntries(Object.entries(ps).filter(([k])=>!k.startsWith(activeSec+':'))));
+    setSuggestOpen(false); setPosIdx(0); setPosSel([]);
+  };
+
   // Fills the active section (build a chorus by switching tabs and picking again).
   const applyProgression=p=>{
     setSectionBars(activeSec,toBars(p.bars));
@@ -1433,9 +1474,50 @@ export default function Player() {
               <FretDiag voicing={upNext.path[0]} strs={upNext.path[0].set.strs} name={null} root={chords[0].root} size="small"/>
             </div>
           )}
-          {!bars.length&&<div className="text-sm text-gray-500 italic self-center px-2">Empty {SECTION_LABELS[activeSec].toLowerCase()} — add bars with +, or pick an iconic progression above to fill it.</div>}
+          {!bars.length&&(
+            <div className="text-sm text-gray-500 self-center px-2 flex items-center gap-3 flex-wrap">
+              <span className="italic">Empty {SECTION_LABELS[activeSec].toLowerCase()} — add bars with +, or pick an iconic progression above to fill it.</span>
+              {activeSec!=='A'&&SECTION_IDEAS[genre]&&(
+                <button onClick={()=>setSuggestOpen(o=>!o)}
+                  className={`px-2.5 py-1 rounded text-xs font-medium border border-dashed transition-all ${suggestOpen?'border-amber-500 text-amber-400':'border-gray-600 text-gray-400 hover:text-gray-200 hover:border-gray-400'}`}>
+                  ✨ Suggest a {SECTION_LABELS[activeSec].toLowerCase()}…
+                </button>
+              )}
+            </div>
+          )}
           <button onClick={addBar} className="rounded-lg border border-dashed border-gray-700 text-gray-500 hover:text-gray-300 hover:border-gray-500 px-4 min-w-[60px] text-2xl transition-all" title="Add bar">+</button>
         </div>
+
+        {!bars.length&&suggestOpen&&activeSec!=='A'&&SECTION_IDEAS[genre]&&(()=>{
+          const role=activeSec==='B'?'chorus':'bridge';
+          const ideas=SECTION_IDEAS[genre][role]||[];
+          const ref=sections.A;
+          // Rank for a pull back into the verse (end on V), contrast on the
+          // bridge's opening chord, and a bar count that stays pass-aligned.
+          const score=p=>{
+            let s=0;
+            if (p.bars[p.bars.length-1][0]===4) s+=2;
+            if (ref.length){
+              if (role==='bridge'&&p.bars[0][0]!==ref[0].deg) s+=2;
+              if ([ref.length,ref.length*2,Math.ceil(ref.length/2)].includes(p.bars.length)) s+=1;
+            }
+            return s;
+          };
+          const ranked=[...ideas].sort((a,b)=>score(b)-score(a));
+          return (
+            <div className="mt-3 bg-gray-950 rounded-lg border border-gray-800 p-3">
+              <div className="text-xs text-gray-500 mb-2">Suggested {role} moves for {GENRES.find(g=>g.key===genre)?.label} — ranked for contrast with your verse and a pull back into it.</div>
+              <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+                {ranked.map(p=>(
+                  <button key={p.name} onClick={()=>applyIdea(p)} className="text-left px-3 py-2 rounded-md bg-gray-900 border border-gray-800 hover:border-gray-600 transition-all">
+                    <div className="text-sm font-medium text-gray-200">{p.name}</div>
+                    <div className="text-xs text-gray-500">{progSummary(p.bars)} <span className="text-gray-600">· {p.bars.length} bars</span></div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {editIdx!==null&&editIdx<bars.length&&(
           <div className="mt-4 p-3 bg-gray-800 rounded-lg border border-emerald-700/50">
