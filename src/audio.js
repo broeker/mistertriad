@@ -144,9 +144,9 @@ const BASE = `${import.meta.env.BASE_URL}samples/`;
 
 // Alternate sample sets: guitar folders are flat per-note; bass folders are
 // manifest-driven. Switching just remaps the instrument to another folder.
-export const GUITAR_SETS = { musyng:'guitar', fluid:'guitar-fluid', fatboy:'guitar-fatboy', nylon:'guitar-nylon', jazz:'guitar-jazz', muted:'guitar-muted', black:'guitar-black', green:'guitar-green', shiny:'guitar-shiny', ganjo:'guitar-ganjo' };
+export const GUITAR_SETS = { musyng:'guitar', fluid:'guitar-fluid', fatboy:'guitar-fatboy', nylon:'guitar-nylon', jazz:'guitar-jazz', muted:'guitar-muted', black:'guitar-black', green:'guitar-green', shiny:'guitar-shiny', ganjo:'guitar-ganjo', standard:'guitar-standard', stdmute:'guitar-stdmute', shinyac:'guitar-shinyac', emily:'guitar-emily', ovation:'guitar-ovation', spanish:'guitar-spanish' };
 export const BASS_SETS = { upright:'bass', electric:'bass-electric' };
-export const PIANO_SETS = { vcsl:'piano', osiris:'piano-osiris' };
+export const PIANO_SETS = { vcsl:'piano', osiris:'piano-osiris', rhodes:'piano-rhodes' };
 // The Backup channel's instrument (a second rhythm voice over the guitar).
 // Single set today; mandolin/accordion later are a folder + one chip.
 export const BACKUP_SETS = { banjo:'guitar-ganjo' };
@@ -275,8 +275,11 @@ const SET_TRIM = {
   'guitar-jazz':1.15, 'guitar-muted':1.6,
   'guitar-black':0.45, 'guitar-green':0.9, // B&G import, measured vs FatBoy 2026-07-10
   'guitar-shiny':0.22, 'guitar-ganjo':0.11, // mastered near full scale; measured 2026-07-10
+  'guitar-standard':0.3, 'guitar-stdmute':1, // measured vs FatBoy 2026-07-13
+  'guitar-shinyac':0.19, 'guitar-emily':0.24, 'guitar-ovation':0.1, 'guitar-spanish':0.08, // acoustics vs FatBoy 2026-07-13
   'bass':1, 'bass-electric':1,
   'piano':1, 'piano-osiris':1.2,            // measured vs VCSL 2026-07-10
+  'piano-rhodes':0.75,                      // measured vs VCSL 2026-07-13 (attack RMS, mid roots)
 };
 
 function startNote(midi, when, gain, inst, dest, art) {

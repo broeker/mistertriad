@@ -238,6 +238,9 @@ const STRUMS = {
   }},
 };
 
+// Strums where a country bass-run walkup into the next chord makes musical sense.
+const GFILL_STRUMS=['boomchick','bluegrass','folk','travis'];
+
 // Drum patterns per mode and meter ({b,kind,g}; sw: swings with the feel).
 // 4/4 entries are the original inline patterns, transcribed exactly.
 const DRUM_PATTERNS = {
@@ -529,6 +532,7 @@ export default function Player() {
   const [drumFills,setDrumFills]=useState(DEFAULT_SET.drumFills);
   const [bassMode,setBassMode]=useState(DEFAULT_SET.bass); // off | root | root5 | walk | boogie
   const [bassFills,setBassFills]=useState(!!DEFAULT_SET.bassFills); // walkups into chord changes (root/root5 only)
+  const [guitarFills,setGuitarFills]=useState(!!DEFAULT_SET.guitarFills); // bass-run walkups into chord changes (country rhythm guitar)
   const [backup,setBackup]=useState(DEFAULT_SET.backup||'off'); // off | roll | chop — second rhythm instrument
   const [lead,setLead]=useState(DEFAULT_SET.lead);     // off | fills | solo
   const [leadEvery,setLeadEvery]=useState(DEFAULT_SET.leadEvery||4); // fills cadence: a run every N bars
@@ -547,6 +551,7 @@ export default function Player() {
   const [pickIdx,setPickIdx]=useState(null); // bar whose voicing-picker popover is open (triads view)
   const [suggestOpen,setSuggestOpen]=useState(false); // chorus/bridge suggestions for the empty active section
   const [bandOpen,setBandOpen]=useState(false); // band chip rows are override detail; genre sets them all
+  const [songOpen,setSongOpen]=useState(true); // open by default — it's the session's entry point
   const [guitarSet,setGuitarSet]=useState(()=>localStorage.getItem('mrtriad.guitarSet')||DEFAULT_GENRE.guitarInst||'fatboy');
   const [bassSet,setBassSet]=useState(()=>localStorage.getItem('mrtriad.bassSet')||DEFAULT_GENRE.bassInst||'upright');
   const [pianoSet,setPianoSet]=useState(()=>localStorage.getItem('mrtriad.pianoSet')||DEFAULT_GENRE.pianoInst||'vcsl');
@@ -753,7 +758,7 @@ export default function Player() {
 
   const applyGenre=g=>{
     setGenre(g.key); setGenreTab(g.group); setMeter(g.meter||'4/4'); setTempo(g.tempo); setFeel(g.feel); setStrum(g.strum);
-    setBassFills(!!g.bassFills); setLeadEvery(g.leadEvery||4); setBackup(g.backup||'off');
+    setBassFills(!!g.bassFills); setGuitarFills(!!g.guitarFills); setLeadEvery(g.leadEvery||4); setBackup(g.backup||'off');
     setDrums(g.drums); setBassMode(g.bass); setLead(g.lead); setDrumFills(g.drumFills); setKeys(g.keys);
     setBassSet(g.bassInst||'upright');
     setGuitarSet(g.guitarInst||'fatboy');
@@ -790,7 +795,7 @@ export default function Player() {
     const bassEff=bassMode==='off'?'off':(BASS_METERS[bassMode]?.includes(meter)?bassMode:'root5');
     const fill3=M.grid.slice(-3), fill4=M.grid.slice(-4), lastSlot=M.grid[M.grid.length-1];
     const events=[];
-    const bassMidis=[],leadMidis=[],pianoMidis=[],backupMidis=[];
+    const bassMidis=[],leadMidis=[],pianoMidis=[],backupMidis=[],gfillMidis=[];
     const guitarMidis=[]; // flattened: pass*passBars + bar
     let leadLast=null; // walker carries across bars so lines connect through chord changes
     // One pass through the bars per entry in passOrder; climbing plays the
@@ -807,7 +812,18 @@ export default function Player() {
         else if (path[i]) midis=voicingMidis(path[i].set.strs,path[i].frets);
       }
       guitarMidis.push(midis);
-      strumPat.forEach(p=>events.push({t:base+sw(p.b)*spb,type:'strum',i:gi,dir:p.dir,g:p.g,span:p.span}));
+      // Guitar fills: drop the last three strums and pick a chromatic bass run
+      // walking into the next bar's chord — the country rhythm-guitar move.
+      const nextCh=chords[(i+1)%passBars];
+      const gFillHere=guitarFills&&sound!=='off'&&GFILL_STRUMS.includes(strum)&&!(nextCh.root===chords[i].root&&nextCh.quality===chords[i].quality)&&midis.length;
+      strumPat.forEach(p=>{ if (gFillHere&&p.b>=fill3[0]) return; events.push({t:base+sw(p.b)*spb,type:'strum',i:gi,dir:p.dir,g:p.g,span:p.span}); });
+      if (gFillHere) {
+        const gTarget=40+((nextCh.root-4+12)%12);
+        const gCur=40+((chords[i].root-4+12)%12);
+        const gSide=(gTarget>=gCur&&gTarget-3>=40)?-1:1;
+        const gRun=[3,2,1].map(k=>gTarget+gSide*k);
+        fill3.forEach((b,k)=>{ events.push({t:base+sw(b)*spb,type:'gfill',m:gRun[k],g:0.85}); gfillMidis.push(gRun[k]); });
+      }
       if (drumPat) drumPat.forEach(d=>events.push({t:base+(d.sw?sw(d.b):d.b)*spb,type:'drum',kind:d.kind,g:d.g}));
       if (drumFills&&!['off','stomp'].includes(drums)&&passBars>=4&&(i+1)%4===0) {
         const fill=DRUM_FILLS[Math.floor(Math.random()*DRUM_FILLS.length)];
@@ -934,9 +950,9 @@ export default function Player() {
     }
     });
     events.sort((a,b)=>a.t-b.t);
-    return {events,loopDur,barDur,spb,guitarMidis,bassMidis,leadMidis,pianoMidis,backupMidis,passBars};
+    return {events,loopDur,barDur,spb,guitarMidis,gfillMidis,bassMidis,leadMidis,pianoMidis,backupMidis,passBars};
   // guitarSet is a dep so switching sample sets re-preloads and hot-swaps mid-play.
-  },[flat,chords,meter,tempo,feel,strum,drums,drumFills,bassMode,bassFills,backup,lead,leadEvery,keys,passOrder,passPath,grips,sound,guitarSet,bassSet,pianoSet]);
+  },[flat,chords,meter,tempo,feel,strum,drums,drumFills,bassMode,bassFills,guitarFills,backup,lead,leadEvery,keys,passOrder,passPath,grips,sound,guitarSet,bassSet,pianoSet]);
 
   const tick=useCallback(()=>{
     const st=playRef.current;
@@ -951,6 +967,7 @@ export default function Player() {
       // grid can't stall past it (late events start immediately and smear).
       if (t>now+0.45) break;
       if (ev.type==='strum') { if (st.guitarMidis[ev.i].length) scheduleStrum(st.guitarMidis[ev.i],t,{dir:ev.dir,gain:ev.g,span:ev.span}); }
+      else if (ev.type==='gfill') scheduleStrum([ev.m],t,{gain:ev.g,span:'bass'});
       else if (ev.type==='drum') scheduleDrum(ev.kind,t,ev.g);
       else if (ev.type==='bass') scheduleBass(ev.m,t,ev.g);
       else if (ev.type==='lead') scheduleLead(ev.m,t,ev.g,ev.art);
@@ -973,7 +990,7 @@ export default function Player() {
     ensureCtx();
     const sc=buildSchedule();
     if (!sc.passBars) return; // empty song (all sections empty or arrangement empty)
-    Promise.all([preload([...sc.guitarMidis.flat(),...sc.leadMidis]),preload(sc.bassMidis,'bass'),preload(sc.pianoMidis,'piano'),preload(sc.backupMidis,'backup'),preloadDrums()]).then(()=>{
+    Promise.all([preload([...sc.guitarMidis.flat(),...sc.gfillMidis,...sc.leadMidis]),preload(sc.bassMidis,'bass'),preload(sc.pianoMidis,'piano'),preload(sc.backupMidis,'backup'),preloadDrums()]).then(()=>{
       const st={...sc,t0:ctxTime()+0.12,nextIdx:0};
       st.timer=setInterval(tick,50);
       playRef.current=st;
@@ -989,7 +1006,7 @@ export default function Player() {
     if (!playRef.current) return;
     const sc=buildSchedule();
     const seq=++rebuildSeq.current;
-    Promise.all([preload([...sc.guitarMidis.flat(),...sc.leadMidis]),preload(sc.bassMidis,'bass'),preload(sc.pianoMidis,'piano'),preload(sc.backupMidis,'backup'),preloadDrums()]).then(()=>{
+    Promise.all([preload([...sc.guitarMidis.flat(),...sc.gfillMidis,...sc.leadMidis]),preload(sc.bassMidis,'bass'),preload(sc.pianoMidis,'piano'),preload(sc.backupMidis,'backup'),preloadDrums()]).then(()=>{
       const st=playRef.current;
       if (!st||seq!==rebuildSeq.current) return; // stopped, or a newer rebuild superseded this one
       const now=ctxTime();
@@ -1020,6 +1037,7 @@ export default function Player() {
     if (s.drumFills!=null) setDrumFills(s.drumFills);
     if (s.bass) setBassMode(s.bass);
     if (s.bassFills!=null) setBassFills(s.bassFills);
+    if (s.guitarFills!=null) setGuitarFills(s.guitarFills);
     if (s.backup) setBackup(s.backup);
     if (s.lead) setLead(s.lead);
     if (s.leadEvery) setLeadEvery(s.leadEvery);
@@ -1072,7 +1090,7 @@ export default function Player() {
   const save=()=>{
     const name=saveName.trim();
     if (!name) return;
-    const entry={name,key,meter,tempo,sections,arrangement,pins,feel,strum,drums,drumFills,bassMode,bassFills,backup,lead,leadEvery,keys,genre};
+    const entry={name,key,meter,tempo,sections,arrangement,pins,feel,strum,drums,drumFills,bassMode,bassFills,guitarFills,backup,lead,leadEvery,keys,genre};
     const next=[...saved.filter(s=>s.name!==name),entry];
     setSaved(next);
     localStorage.setItem(STORE_KEY,JSON.stringify(next));
@@ -1094,6 +1112,7 @@ export default function Player() {
     setDrumFills(!!s.drumFills);
     setBassMode(s.bassMode&&s.bassMode!=='off'?(BASS_METERS[s.bassMode]?.includes(m)?s.bassMode:'root5'):'off');
     setBassFills(!!s.bassFills);
+    setGuitarFills(!!s.guitarFills);
     setBackup(['roll','chop'].includes(s.backup)?s.backup:'off');
     setLead(s.lead||'off'); setLeadEvery([2,4,8].includes(s.leadEvery)?s.leadEvery:4);
     setKeys(s.keys||'off');
@@ -1127,8 +1146,13 @@ export default function Player() {
         </div>
       </div>
 
-      <div className="mt-4 mb-4 bg-gray-900/50 rounded-xl border border-gray-800 p-4">
-      <div className="text-xs text-gray-500 uppercase tracking-wide font-bold mb-3">Song</div>
+      <div className="mt-4 mb-4 bg-gray-900/50 rounded-xl border border-gray-800">
+      <button onClick={()=>setSongOpen(o=>!o)} className="w-full flex items-center gap-3 px-4 py-2.5 text-left">
+        <span className="text-xs text-gray-500 uppercase tracking-wide font-bold">Song</span>
+        {!songOpen&&<span className="text-xs text-gray-600 truncate">{NOTES[key]} · {GENRES.find(g=>g.key===genre)?.label} · {(PROGRESSIONS[genre]||[]).find(p=>barsKey(bars)===barsKey(toBars(p.bars)))?.name||`${bars.length} bars`}</span>}
+        <span className="ml-auto text-xs text-gray-500">{songOpen?'▲':'▼'}</span>
+      </button>
+      {songOpen&&(<div className="px-4 pb-1">
       <div className="mb-4">
         <label className="text-xs text-gray-400 uppercase tracking-wide mb-2 block">Key</label>
         <div className="flex flex-wrap gap-1.5">
@@ -1183,6 +1207,7 @@ export default function Player() {
           </div>
         )}
       </div>
+      </div>)}
       </div>
 
       <div className="mb-4 bg-gray-900/50 rounded-xl border border-gray-800">
@@ -1192,7 +1217,8 @@ export default function Player() {
           <span className="ml-auto text-xs text-gray-500">{bandOpen?'▲':'▼'}</span>
         </button>
         {bandOpen&&(
-        <div className="px-4 pb-3 flex flex-wrap items-center gap-3">
+        <div className="px-4 pb-3 flex flex-col gap-2.5">
+        <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-gray-500 uppercase tracking-wide">Time</span>
           {METER_KEYS.map(k=>(
@@ -1209,51 +1235,58 @@ export default function Player() {
             );
           })}
         </div>
+        </div>
+        <div className="rounded-lg border border-gray-800 p-2 flex flex-col gap-2">
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-gray-500 uppercase tracking-wide">Guitar</span>
-          {[['cowboy','Cowboy'],['triads','Triads'],['off','Muted']].map(([k,l])=>(
+          {[['off','Off'],['cowboy','Cowboy'],['triads','Triads']].map(([k,l])=>(
             <button key={k} onClick={()=>setSound(k)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${sound===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{l}</button>
           ))}
+          <button onClick={()=>setGuitarFills(f=>!f)} disabled={sound==='off'||!GFILL_STRUMS.includes(strum)} title="Walk a bass run into the next chord whenever it changes — the country rhythm-guitar move"
+            className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${guitarFills?'border-amber-500 text-amber-400':'border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-500'} disabled:opacity-40 disabled:cursor-not-allowed`}>Fills</button>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs text-gray-500 uppercase tracking-wide">Strum</span>
           {Object.entries(STRUMS).filter(([,s])=>s.p[meter]).map(([k,s])=>(
             <button key={k} onClick={()=>setStrum(k)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${strum===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{s.label}</button>
           ))}
         </div>
-        <div className="flex items-center gap-1.5">
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+        <div className="rounded-lg border border-gray-800 p-2 flex flex-wrap items-center gap-1.5">
           <span className="text-xs text-gray-500 uppercase tracking-wide">Drums</span>
           {[['off','Off'],['stomp','Stomp'],['kit','Kit'],['train','Train'],['bossa','Bossa'],['swing','Swing'],['funk','Funk']].filter(([k])=>k==='off'||DRUM_PATTERNS[k][meter]).map(([k,l])=>(
             <button key={k} onClick={()=>setDrums(k)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${drums===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{l}</button>
           ))}
-          {!['off','stomp'].includes(drums)&&(
-            <button onClick={()=>setDrumFills(f=>!f)} className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${drumFills?'border-amber-500 text-amber-400':'border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-500'}`}>Fills</button>
-          )}
+          <button onClick={()=>setDrumFills(f=>!f)} disabled={['off','stomp'].includes(drums)} className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${drumFills?'border-amber-500 text-amber-400':'border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-500'} disabled:opacity-40 disabled:cursor-not-allowed`}>Fills</button>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="rounded-lg border border-gray-800 p-2 flex flex-wrap items-center gap-1.5">
           <span className="text-xs text-gray-500 uppercase tracking-wide">Bass</span>
           {[['off','Off'],['root','Root'],['root5','Root–5th'],['walk','Walking'],['boogie','Boogie'],['bossa','Bossa'],['funk','Funk']].filter(([k])=>k==='off'||BASS_METERS[k].includes(meter)).map(([k,l])=>(
             <button key={k} onClick={()=>setBassMode(k)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${bassMode===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{l}</button>
           ))}
-          {['root','root5'].includes(bassMode)&&(
-            <button onClick={()=>setBassFills(f=>!f)} title="Walk up (or down) into the next chord whenever it changes"
-              className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${bassFills?'border-amber-500 text-amber-400':'border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-500'}`}>Fills</button>
-          )}
+          <button onClick={()=>setBassFills(f=>!f)} disabled={!['root','root5'].includes(bassMode)} title="Walk up (or down) into the next chord whenever it changes"
+            className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${bassFills?'border-amber-500 text-amber-400':'border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-500'} disabled:opacity-40 disabled:cursor-not-allowed`}>Fills</button>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="rounded-lg border border-gray-800 p-2 flex flex-wrap items-center gap-1.5">
           <span className="text-xs text-gray-500 uppercase tracking-wide">Backup</span>
           {[['off','Off'],['roll','Roll'],['chop','Chop']].map(([k,l])=>(
             <button key={k} onClick={()=>setBackup(k)} title={k==='roll'?'Banjo rolls over each bar’s chord':k==='chop'?'Muted backbeat stabs':undefined}
               className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${backup===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{l}</button>
           ))}
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="rounded-lg border border-gray-800 p-2 flex flex-wrap items-center gap-1.5">
           <span className="text-xs text-gray-500 uppercase tracking-wide">Keys</span>
-          {[['off','Off'],['on','Comp'],['fills','Comp + Fills']].map(([k,l])=>(
-            <button key={k} onClick={()=>setKeys(k)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${keys===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{l}</button>
-          ))}
+          {[['off','Off'],['on','Comp']].map(([k,l])=>{
+            const active=k==='off'?keys==='off':keys!=='off'; // Comp lights for both comp modes
+            return <button key={k} onClick={()=>setKeys(k)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${active?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{l}</button>;
+          })}
+          <button onClick={()=>setKeys(keys==='fills'?'on':'fills')} disabled={keys==='off'} title="Sprinkle a chord-tone run into every 4th bar — new each time Play builds the loop"
+            className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${keys==='fills'?'border-amber-500 text-amber-400':'border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-500'} disabled:opacity-40 disabled:cursor-not-allowed`}>Fills</button>
         </div>
-        <div className="flex items-center gap-1.5">
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+        <div className="rounded-lg border border-gray-800 p-2 flex flex-wrap items-center gap-1.5">
           <span className="text-xs text-gray-500 uppercase tracking-wide">Lead</span>
           {[['off','Off'],['fills','Fills'],['solo','Solo']].map(([k,l])=>(
             <button key={k} onClick={()=>setLead(k)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${lead===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{l}</button>
@@ -1265,6 +1298,7 @@ export default function Player() {
         </div>
         <button onClick={()=>setShowMixer(o=>!o)} className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${showMixer?'border-amber-500 text-amber-400':'border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-500'}`}>Mixer</button>
         </div>
+        </div>
         )}
 
         {bandOpen&&showMixer&&(
@@ -1273,7 +1307,7 @@ export default function Player() {
             <MixSlider label="Master" min={0} max={1.5} step={0.05} value={mixer.master} onChange={v=>updMixer('master',null,v)}/>
             <button onClick={()=>navigator.clipboard?.writeText(JSON.stringify(mixer,null,2))} className="px-2.5 py-1 rounded text-xs font-medium bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700 hover:text-white transition-all">Copy settings</button>
             <button title="Copy the full tuned state — style, band knobs, sample sets, and mixer — as one JSON blob, ready to paste to Claude to bake in as that style's defaults."
-              onClick={()=>navigator.clipboard?.writeText(JSON.stringify({genre,meter,tempo,feel,strum,drums,drumFills,bass:bassMode,bassFills,backup,lead,leadEvery,keys,guitarInst:guitarSet,bassInst:bassSet,pianoInst:pianoSet,mixer},null,2))}
+              onClick={()=>navigator.clipboard?.writeText(JSON.stringify({genre,meter,tempo,feel,strum,drums,drumFills,bass:bassMode,bassFills,guitarFills,backup,lead,leadEvery,keys,guitarInst:guitarSet,bassInst:bassSet,pianoInst:pianoSet,mixer},null,2))}
               className="px-2.5 py-1 rounded text-xs font-medium bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700 hover:text-white transition-all">Copy style</button>
             <button onClick={resetMixer} className="px-2.5 py-1 rounded text-xs font-medium bg-gray-800 text-gray-400 border border-gray-700 hover:text-red-400 transition-all">Reset</button>
             <span className="text-xs text-gray-600">Lo/Hi are shelf EQs in dB (250Hz / 2.8kHz). Live while playing; saved in your browser.</span>
@@ -1288,10 +1322,15 @@ export default function Player() {
                 <MixSlider label="Lo" min={-12} max={12} step={1} value={mixer[ch].low} onChange={v=>updMixer(ch,'low',v)}/>
                 <MixSlider label="Hi" min={-12} max={12} step={1} value={mixer[ch].high} onChange={v=>updMixer(ch,'high',v)}/>
                 {ch==='guitar'&&(
-                  <span className="flex flex-wrap items-center gap-1">
-                    <span className="text-xs text-gray-500">Samples</span>
-                    {[['musyng','Musyng'],['fluid','Fluid'],['fatboy','FatBoy'],['nylon','Nylon'],['jazz','E.Jazz'],['muted','E.Muted'],['black','E.Black'],['green','E.Green'],['shiny','E.Shiny'],['ganjo','Banjo']].map(([k,l])=>(
-                      <button key={k} onClick={()=>setGuitarSet(k)} className={`px-2 py-0.5 rounded text-xs font-medium transition-all ${guitarSet===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>{l}</button>
+                  <span className="flex flex-col gap-1 w-full">
+                    {[['Acoustic',[['musyng','Musyng'],['fluid','Fluid'],['fatboy','FatBoy'],['nylon','Nylon'],['shinyac','A.Shiny'],['emily','A.Emily'],['ovation','A.Ovation'],['spanish','A.Spanish'],['ganjo','Banjo']]],
+                       ['Electric',[['jazz','E.Jazz'],['muted','E.Muted'],['black','E.Black'],['green','E.Green'],['shiny','E.Shiny'],['standard','E.Std'],['stdmute','E.SMute']]]].map(([label,sets])=>(
+                      <span key={label} className="flex flex-wrap items-center gap-1">
+                        <span className="text-xs text-gray-500 w-14">{label}</span>
+                        {sets.map(([k,l])=>(
+                          <button key={k} onClick={()=>setGuitarSet(k)} className={`px-2 py-0.5 rounded text-xs font-medium transition-all ${guitarSet===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>{l}</button>
+                        ))}
+                      </span>
                     ))}
                   </span>
                 )}
@@ -1306,7 +1345,7 @@ export default function Player() {
                 {ch==='piano'&&(
                   <span className="flex flex-wrap items-center gap-1">
                     <span className="text-xs text-gray-500">Samples</span>
-                    {[['vcsl','Upright'],['osiris','Osiris']].map(([k,l])=>(
+                    {[['vcsl','Upright'],['osiris','Osiris'],['rhodes','Rhodes']].map(([k,l])=>(
                       <button key={k} onClick={()=>setPianoSet(k)} className={`px-2 py-0.5 rounded text-xs font-medium transition-all ${pianoSet===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>{l}</button>
                     ))}
                   </span>
@@ -1559,8 +1598,8 @@ export default function Player() {
 
       <details className="mt-6 text-xs text-gray-600 border-t border-gray-800 pt-4">
         <summary className="cursor-pointer text-gray-500 font-bold hover:text-gray-300 select-none">How to use &amp; credits</summary>
-        <p className="mt-2">Pick a genre tab (it starts you on that genre's first style and progression), then a style, then one of its iconic progressions — or click any bar to edit its chord, and + to add bars. Songs can have up to three <strong>sections</strong> (Verse/Chorus/Bridge tabs above the bars): switch to an empty tab and pick a progression (or add bars) to fill it, then build the <strong>Arrangement</strong> with the + chips — playback runs the whole arrangement as one loop, voice-leading flows across section boundaries, and the sounding section's chip lights up. Saved progressions keep their sections, arrangement, and pinned voicings. Switching style loads that style's first progression along with its sound — pick another from the list (<strong>More…</strong> opens the genre's full catalog with numerals and bar counts) or edit the bars from there. Cowboy chords shows the simplest first-position grip for each bar; Triads shows a voice-led triad path on your chosen string set — or, with String Set on <strong>Auto</strong> (the default), across sets: each bar picks the voicing that moves pitches and your hand the least, crossing between 3-2-1, 4-3-2, and 5-4-3 the way real position playing does (each bar's card names its set). <strong>Position</strong> controls where the path sits on the neck. <strong>Loop the neck</strong> (the default) plays the progression once per position, climbing up and back down, changing exactly on the loop boundary — the diagrams and the counter follow along, so you can ride the whole neck hands-free; the numbered chips choose which positions the climb visits (e.g. just 1–2 while you're learning the low half). While climbing, a dashed "next loop" card at the end of the grid shows where bar 1 lands on the next pass, pulsing through the final bar — that's your cue for where the hand goes. <strong>Manual</strong> parks it in one position with ▼/▲ steppers. <strong>Vary</strong> holds one position (pick it with the same steppers) but starts each pass on the next same-position shape, re-voicing the whole progression across neighboring string sets loop after loop — the "next loop" card announces the coming shape. In every mode the improvised Lead follows the position, since its notes come from each bar's voicing. To bend the path at one spot, click a bar and pick a <strong>Voicing</strong>: that bar is pinned (marked on its card) and later bars re-lead from it; Auto unpins. Everything is live while it plays — tempo, key, band, even switching progressions — playback carries on from the same beat. The <strong>View</strong> and the <strong>Guitar</strong> sound are independent, and you can switch views while it plays: watch the triads while the guitar strums cowboy chords to follow along, set Guitar to Triads to hear what the triads should sound like, or mute it and play the triads yourself over the rhythm section. A <strong>Style</strong> button sets time signature, tempo, feel, strum pattern, and the band in one tap — every knob stays individually adjustable after. <strong>Time</strong> switches the meter by hand: 4/4, 3/4 (waltz), or 6/8 (compound — two pulses of three, the slow-blues feel). Strums, drums, and bass lines are written per meter, so the rows only show patterns that exist in the current one; switching meter pulls any knob that doesn't fit back to one that does (strum to Folk, drums to Kit, bass to Root–5th). Shuffle is disabled in 6/8 since the meter is already triplet-based. Some progressions also pin part of the band to fit their character (Cabbage locks in the driving boom-chick and alternating bass); knobs a progression doesn't pin keep your current settings. Strums: Folk is D-DU-UDU; Boom-chick picks the bass note on 1 and 3 and strums the top strings on 2 and 4 (old-time rhythm guitar); Bluegrass adds upstroke fills to the boom-chick; Lo-fi is sparse and lazy (it doubles as jazz comping); Pop is driving eighths; Travis fakes fingerpicking — thumb bass on every beat, soft finger picks between; Bossa is the syncopated bossa comp; Funk is scratchy off-beat sixteenths. Drums: Stomp (foot-tap), Kit (kick/snare/hats), Train (brushes with a backbeat), Bossa (rim clicks over hats), Swing (ride pattern with feathered kick — pair with Shuffle), Funk (syncopated kick, ghost snares); the Fills toggle throws a snare/tom run into every 4th bar, different each time Play builds the loop. <strong>Backup</strong> adds a second rhythm instrument over the guitar — a banjo, for now: Roll arpeggiates each bar's chord in three-finger-style eighth-note rolls (bluegrass turns it on by default), Chop plays short muted backbeat stabs (the mandolin-chop feel); it has its own Mixer strip. Keys adds an upright piano comping block chords on each bar; Comp + Fills also sprinkles a chord-tone run into every 4th bar, new each time Play builds the loop. Bass patterns: Root, Root–5th, Walking (with chromatic approaches), Boogie (the swung R-3-5-6 shuffle line), Bossa (dotted root–fifth), or Funk (syncopated with octave pops); on Root and Root–5th a <strong>Fills</strong> toggle walks up (or down) into the next chord whenever it changes — the country move that livens the simple patterns without full-time Walking — played on an upright or an electric (the Mixer's bass Samples switch; Pop, Indie Pop, and Funk preset the electric). The Mixer's guitar Samples switch likewise offers three acoustics and two electrics (E.Jazz hollowbody-ish, E.Muted for funk scratch). Shuffle swings the offbeat strums and hats onto the triplet grid (the blues preset selects it automatically). Lead improvises pentatonic notes drawn from each bar's triad position on the selected string set — Fills plays a run into every Nth bar (the /8 /4 /2 chips set how often), Solo noodles throughout; each press of Play writes a new solo, and it loops as played. The lead also rolls guitar articulations as it goes: bends into strong beats and fill endings, hammer-on/pull-off legato on quick close steps, and the occasional double stop. Saved progressions live in your browser.</p>
-        <p className="mt-2">Sounds: guitar from the <a href="https://github.com/gleitz/midi-js-soundfonts" className="underline hover:text-gray-400">FatBoy SoundFont</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/" className="underline hover:text-gray-400">CC BY-SA 3.0</a>); upright bass from <a href="https://github.com/sfzinstruments/karoryfer.meatbass" className="underline hover:text-gray-400">Meatbass</a> and electric bass from <a href="https://github.com/sfzinstruments/karoryfer.black-and-blue-basses" className="underline hover:text-gray-400">Black And Blue Basses</a>, both by Karoryfer Samples (CC0); drums from the <a href="https://archive.org/details/SalamanderDrumkit" className="underline hover:text-gray-400">Salamander Drumkit</a> by Alexander Holm (public domain); brushes from <a href="https://shop.karoryfer.com/pages/free-samples" className="underline hover:text-gray-400">Swirly Drums</a> by Karoryfer Samples (CC0); upright piano from the <a href="https://github.com/sgossner/VCSL" className="underline hover:text-gray-400">Versilian Community Sample Library</a> (CC0); electric guitars (E.Black/E.Green) from <a href="https://github.com/sfzinstruments/karoryfer.black-and-green-guitars" className="underline hover:text-gray-400">Black And Green Guitars</a> by Karoryfer Samples (CC0); Osiris piano from <a href="https://github.com/sfzinstruments/Osiris_Piano" className="underline hover:text-gray-400">Osiris Piano</a> by Versilian Studios &amp; Karoryfer Samples (CC0); archtop electric (E.Shiny) from <a href="https://github.com/sfzinstruments/karoryfer.shinyguitar" className="underline hover:text-gray-400">Shinyguitar</a> by Karoryfer Samples (CC0); banjo from <a href="https://github.com/sfzinstruments/ganjo" className="underline hover:text-gray-400">ganjo</a> by itsclipping (CC0).</p>
+        <p className="mt-2">Pick a genre tab (it starts you on that genre's first style and progression), then a style, then one of its iconic progressions — or click any bar to edit its chord, and + to add bars. Songs can have up to three <strong>sections</strong> (Verse/Chorus/Bridge tabs above the bars): switch to an empty tab and pick a progression (or add bars) to fill it, then build the <strong>Arrangement</strong> with the + chips — playback runs the whole arrangement as one loop, voice-leading flows across section boundaries, and the sounding section's chip lights up. Saved progressions keep their sections, arrangement, and pinned voicings. Switching style loads that style's first progression along with its sound — pick another from the list (<strong>More…</strong> opens the genre's full catalog with numerals and bar counts) or edit the bars from there. Cowboy chords shows the simplest first-position grip for each bar; Triads shows a voice-led triad path on your chosen string set — or, with String Set on <strong>Auto</strong> (the default), across sets: each bar picks the voicing that moves pitches and your hand the least, crossing between 3-2-1, 4-3-2, and 5-4-3 the way real position playing does (each bar's card names its set). <strong>Position</strong> controls where the path sits on the neck. <strong>Loop the neck</strong> (the default) plays the progression once per position, climbing up and back down, changing exactly on the loop boundary — the diagrams and the counter follow along, so you can ride the whole neck hands-free; the numbered chips choose which positions the climb visits (e.g. just 1–2 while you're learning the low half). While climbing, a dashed "next loop" card at the end of the grid shows where bar 1 lands on the next pass, pulsing through the final bar — that's your cue for where the hand goes. <strong>Manual</strong> parks it in one position with ▼/▲ steppers. <strong>Vary</strong> holds one position (pick it with the same steppers) but starts each pass on the next same-position shape, re-voicing the whole progression across neighboring string sets loop after loop — the "next loop" card announces the coming shape. In every mode the improvised Lead follows the position, since its notes come from each bar's voicing. To bend the path at one spot, click a bar and pick a <strong>Voicing</strong>: that bar is pinned (marked on its card) and later bars re-lead from it; Auto unpins. Everything is live while it plays — tempo, key, band, even switching progressions — playback carries on from the same beat. The <strong>View</strong> and the <strong>Guitar</strong> sound are independent, and you can switch views while it plays: watch the triads while the guitar strums cowboy chords to follow along, set Guitar to Triads to hear what the triads should sound like, or mute it and play the triads yourself over the rhythm section. A <strong>Style</strong> button sets time signature, tempo, feel, strum pattern, and the band in one tap — every knob stays individually adjustable after. <strong>Time</strong> switches the meter by hand: 4/4, 3/4 (waltz), or 6/8 (compound — two pulses of three, the slow-blues feel). Strums, drums, and bass lines are written per meter, so the rows only show patterns that exist in the current one; switching meter pulls any knob that doesn't fit back to one that does (strum to Folk, drums to Kit, bass to Root–5th). Shuffle is disabled in 6/8 since the meter is already triplet-based. Some progressions also pin part of the band to fit their character (Cabbage locks in the driving boom-chick and alternating bass); knobs a progression doesn't pin keep your current settings. Strums: Folk is D-DU-UDU; Boom-chick picks the bass note on 1 and 3 and strums the top strings on 2 and 4 (old-time rhythm guitar); Bluegrass adds upstroke fills to the boom-chick; Lo-fi is sparse and lazy (it doubles as jazz comping); Pop is driving eighths; Travis fakes fingerpicking — thumb bass on every beat, soft finger picks between; Bossa is the syncopated bossa comp; Funk is scratchy off-beat sixteenths. Drums: Stomp (foot-tap), Kit (kick/snare/hats), Train (brushes with a backbeat), Bossa (rim clicks over hats), Swing (ride pattern with feathered kick — pair with Shuffle), Funk (syncopated kick, ghost snares); the Fills toggle throws a snare/tom run into every 4th bar, different each time Play builds the loop. <strong>Backup</strong> adds a second rhythm instrument over the guitar — a banjo, for now: Roll arpeggiates each bar's chord in three-finger-style eighth-note rolls (bluegrass turns it on by default), Chop plays short muted backbeat stabs (the mandolin-chop feel); it has its own Mixer strip. Keys adds an upright piano comping block chords on each bar; its Fills toggle also sprinkles a chord-tone run into every 4th bar, new each time Play builds the loop. Bass patterns: Root, Root–5th, Walking (with chromatic approaches), Boogie (the swung R-3-5-6 shuffle line), Bossa (dotted root–fifth), or Funk (syncopated with octave pops); on Root and Root–5th a <strong>Fills</strong> toggle walks up (or down) into the next chord whenever it changes — the country move that livens the simple patterns without full-time Walking — played on an upright or an electric (the Mixer's bass Samples switch; Pop, Indie Pop, and Funk preset the electric). The Mixer's guitar Samples switch likewise offers three acoustics and two electrics (E.Jazz hollowbody-ish, E.Muted for funk scratch). Shuffle swings the offbeat strums and hats onto the triplet grid (the blues preset selects it automatically). Lead improvises pentatonic notes drawn from each bar's triad position on the selected string set — Fills plays a run into every Nth bar (the /8 /4 /2 chips set how often), Solo noodles throughout; each press of Play writes a new solo, and it loops as played. The lead also rolls guitar articulations as it goes: bends into strong beats and fill endings, hammer-on/pull-off legato on quick close steps, and the occasional double stop. Saved progressions live in your browser.</p>
+        <p className="mt-2">Sounds: guitar from the <a href="https://github.com/gleitz/midi-js-soundfonts" className="underline hover:text-gray-400">FatBoy SoundFont</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/" className="underline hover:text-gray-400">CC BY-SA 3.0</a>); upright bass from <a href="https://github.com/sfzinstruments/karoryfer.meatbass" className="underline hover:text-gray-400">Meatbass</a> and electric bass from <a href="https://github.com/sfzinstruments/karoryfer.black-and-blue-basses" className="underline hover:text-gray-400">Black And Blue Basses</a>, both by Karoryfer Samples (CC0); drums from the <a href="https://archive.org/details/SalamanderDrumkit" className="underline hover:text-gray-400">Salamander Drumkit</a> by Alexander Holm (public domain); brushes from <a href="https://shop.karoryfer.com/pages/free-samples" className="underline hover:text-gray-400">Swirly Drums</a> by Karoryfer Samples (CC0); upright piano from the <a href="https://github.com/sgossner/VCSL" className="underline hover:text-gray-400">Versilian Community Sample Library</a> (CC0); electric guitars (E.Black/E.Green) from <a href="https://github.com/sfzinstruments/karoryfer.black-and-green-guitars" className="underline hover:text-gray-400">Black And Green Guitars</a> by Karoryfer Samples (CC0); Osiris piano from <a href="https://github.com/sfzinstruments/Osiris_Piano" className="underline hover:text-gray-400">Osiris Piano</a> by Versilian Studios &amp; Karoryfer Samples (CC0); archtop electric (E.Shiny) from <a href="https://github.com/sfzinstruments/karoryfer.shinyguitar" className="underline hover:text-gray-400">Shinyguitar</a> by Karoryfer Samples (CC0); banjo from <a href="https://github.com/sfzinstruments/ganjo" className="underline hover:text-gray-400">ganjo</a> by itsclipping (CC0); Rhodes piano from <a href="https://github.com/sfzinstruments/jlearman.jRhodes3c" className="underline hover:text-gray-400">jRhodes3</a> by Jeff Learman (samples <a href="https://creativecommons.org/licenses/by-nc/4.0/" className="underline hover:text-gray-400">CC BY-NC</a> — non-commercial); electric guitar (E.Std/E.SMute) from <a href="https://sfzinstruments.github.io/guitars/standard_guitar/" className="underline hover:text-gray-400">Standard Guitar</a> by Unreal Instruments ("license-free" per bundled terms; credited anyway); acoustic guitars from Shinyguitar's acoustic variant (A.Shiny) and <a href="https://github.com/sfzinstruments/karoryfer.emilyguitar" className="underline hover:text-gray-400">Emilyguitar</a> (A.Emily), both Karoryfer Samples (CC0); <a href="https://github.com/sfzinstruments/OvationGuitar" className="underline hover:text-gray-400">Ovation Guitar</a> (A.Ovation) by S. Christian Collins; classical (A.Spanish) from <a href="https://github.com/freepats/spanish-classical-guitar" className="underline hover:text-gray-400">FreePats</a> (CC0).</p>
       </details>
       </>)}
     </div>

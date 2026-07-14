@@ -38,6 +38,51 @@
 - **2026-07-10 ~23:40 CDT** — Osiris verdict: Tim not sold; VCSL stays
   default. Imported queue #3 and #4: Shinyguitar (E.Shiny) and ganjo
   (Banjo), trims measured, credits added.
+- **2026-07-13** — Keys-expansion search (electric piano / Moog / synth —
+  first time this slot was searched): jRhodes3 to audition pool (CC-BY-NC
+  caveat), Wurlitzer parked pending a license-verified source, no CC0 Moog
+  multisamples exist — mint-your-own from FOSS synths noted as the path;
+  Caveman Cosmonaut re-elevated as the existing CC0 synth-keys candidate.
+- **2026-07-13 (later)** — Tim OK'd non-CC0 use with a commercialization exit
+  map (new section below). **Imported jRhodes3c** → `piano-rhodes` (Rhodes in
+  the Mixer's piano row): mono looped FLACs, 15 roots (29–96) × 5 vel layers,
+  SFZ-parsed layer order, 48 kbps mono MP3, 1.5 MB. Trim 0.75 (attack-RMS vs
+  VCSL at roots 55/59/65). Footer credit names the CC BY-NC license.
+- **2026-07-13 (later still)** — License criterion relaxed to "freely
+  downloadable" (personal-use era; triage section is the commercial exit
+  map). New sweep added: Unreal Standard Guitar (best free e-guitar),
+  DrumGizmo kits (deepest free acoustic drums), Flame Studios real banjo,
+  Pianobook WörliTzer + catalog, AVL kits re-eligible. Sealed formats
+  (Kontakt/plugin-only) remain excluded on format grounds.
+- **2026-07-13 (night)** — **Imported Standard Guitar** → `guitar-standard`
+  (E.Std, Sus_Down articulation) + `guitar-stdmute` (E.SMute, Mute_Down).
+  716 MB RAR (Google Drive; portable unrar in scratchpad since no sudo);
+  chromatic roots E2–D6 with 8 RRs and filter-modeled dynamics (single
+  velocity layer — matches our gain-scaling fine). Flattened every 3rd
+  semitone × 3 spread RRs: 51 + 39 files, 1.6 MB total, 48 kbps mono.
+  Trims vs FatBoy: standard 0.3 (~10 dB hot), stdmute 1.0. Bundled terms:
+  "license-free, no credit required" — credited anyway; triage row added.
+  Unused articulations parked in the archive: alternate strokes, slides,
+  hammers/pulls, harmonics, brush, fret-mute (interesting for a future
+  strum-engine articulation pass).
+- **2026-07-13 (acoustic batch)** — Tim wanted the full acoustic audition pool
+  (data point: he's been preferring Musyng over FatBoy). **Imported four
+  sets** (~10 MB total): `guitar-shinyac` (**A.Shiny** — Shinyguitar's
+  acoustic variant, CC0, native m3 roots, vl2–4 × 3 RRs, trim 0.19);
+  `guitar-emily` (**A.Emily** — Karoryfer Emilyguitar, CC0, mf/f × 3 RRs,
+  trim 0.24); `guitar-ovation` (**A.Ovation** — S. Christian Collins
+  GigaSampler conversion, chromatic per-string samples that *sound an octave
+  below their SFZ keys* — verified by pitch analysis, mapped key−12; no
+  stated license → triage row; trim 0.10); `guitar-spanish` (**A.Spanish** —
+  FreePats classical nylon, CC0, chromatic + pitch_keycenter low-range
+  regions, trim 0.08). Mixer guitar row now groups acoustics (A.*) before
+  electrics (E.*). Pianobook acoustics still unexplored (browsing trip).
+  gaps. Found **Real Rotor Organ** (Indiginus; real B3 + spinning Leslie,
+  free, Decent Sampler format) — added as the organ answer with a pre-loop
+  conversion caveat. Corrected the 07-10 sweep's "acoustic slot covered"
+  call: all current acoustics are soundfont renders; Shinyguitar's parked
+  acoustic variant is the cheapest real replacement, Emilyguitar/Ovation
+  re-opened for evaluation.
 
 ## Current inventory
 
@@ -91,9 +136,12 @@ upgrade.
 - Per-note one-shots (see engine constraints)
 - Sounds better than the incumbent for at least one style
 - Reasonable flattened size (a few MB per set; GitHub Pages hosting)
-- License: must permit **redistribution**, not just use — the app rehosts
-  samples on GitHub Pages. CC0/PD preferred; attribution licenses (CC-BY)
-  OK with footer credit. "Free to use" plugin freeware fails this.
+- License *(relaxed 2026-07-13 — personal-use era)*: anything **freely
+  downloadable** qualifies; redistribution-clean (CC0/PD/CC-BY) still
+  preferred where quality is equal. Every non-CC0 import gets a row in the
+  license-triage section (the commercial exit map) and a footer credit
+  naming its license. Sealed formats (Kontakt .nkx, plugin-only) still fail
+  on *format*, not license.
 
 ## Candidates
 
@@ -197,6 +245,60 @@ already in use; VSCO CE — parked). New findings:
 | Flame Studios banjo (+guitars/bass) | fallback for the banjo slot if ganjo disappoints — real banjo, but GPLv3 (rehosting legal with license text, just messier than CC0) and GigaStudio .gig format (extra conversion tooling) |
 | AVL Drumkits | skip — CC-BY-SA (ShareAlike friction on rehosted MP3s) when CC0 kits (Muldjord, Colombo, Virtuosity) exist |
 | Aeolus / setBFree | not samples — synth engines, unusable in-browser directly. **But**: setBFree could be *sampled offline* to mint a Hammond-ish organ set (synth output isn't GPL-encumbered) — noted as the path to an organ set if Caveman Cosmonaut disappoints. |
+
+**Keys expansion: electric piano / Moog / synth (searched 2026-07-13)**
+All of these ride the existing keys channel via `PIANO_SETS` — cheap imports
+through the standard pipeline.
+
+| Candidate | License / format | Verdict |
+|---|---|---|
+| **jRhodes3c/3d** (sfzinstruments — 1977 Rhodes Mark I Stage 73) | samples **CC-BY-NC**, rest CC0; SFZ, up to 5 vel layers, roots every 4th white key | **IMPORTED 2026-07-13** as `piano-rhodes` (3c mono). First non-commercial-only set — see license-triage section. Targets Lo-Fi, Funk, Slow Blues, Pop, Jazz comp; style assignments await Tim's ear pass. 3d (full-length) is the fallback if 3c's looped one-shots feel truncated under sustained comping. |
+| Wurlitzer (musical-artifacts #645; Greg Sullivan e-pianos; Pianobook WörliTzer) | unverified / GigaStudio format / Pianobook community license | ○ parked — no license-verified redistributable source found; musical-artifacts page blocks automated fetch, check by hand if the Wurli itch is real |
+| Moog / analog synth multisamples | none found CC0 — KVR confirms the gap; commercial "royalty-free" packs fail redistribution (the DSK wall) | ✗ as an import. **★ as a mint-your-own**: render per-note one-shots offline from FOSS synths — Surge XT (analog/Moog-ish), Dexed (DX-style FM e-piano) — synth *output* is unencumbered, and we choose roots/layers to fit the manifest exactly. Same trick as the setBFree organ note. |
+| **Caveman Cosmonaut** (Karoryfer, CC0, sampled 80s Polish analog keys) | CC0 | re-elevated: this is the already-identified real-hardware synth-keys candidate; audition before minting anything |
+
+## Loosened-license candidates (searched 2026-07-13)
+
+What the personal-use relaxation newly unlocks, best-first per slot:
+
+| Slot | Candidate | Why it's the best available | Cost/notes |
+|---|---|---|---|
+| **Electric guitar** | **Unreal Instruments Standard Guitar** (sfz+FLAC, ~2400 samples, 44.1k/24-bit, sustain/mute/hammer/pull articulation groups) | KVR consensus "best free e-guitar"; real humbucker with picking noise; the mute group doubles as an E.Muted upgrade for funk | free DL, custom license (triage row on import). Flatten sustain + mute groups separately |
+| Electric guitar (heavy) | Unreal Metal GTX | if a rock style ever wants chunk | same |
+| **Drums** | **DrumGizmo kits** (drumgizmo.org/kits): DRSKit (general studio kit), CrocellKit (8.4 GB, ~100-hit snare), Aasimonster (metal), MuldjordKit (already queued via FreePats) | deepest free multisampled acoustic kits anywhere; WAV+XML per-hit → flattens straight into the drum manifest with real velocity layers | huge raw downloads; pick 3–4 layers per piece. CC-BY-SA-family licenses now fine |
+| Drums (alt) | AVL Drumkits (Black Pearl, Red Zeppelin) | previously skipped only for ShareAlike; solid rock/vintage kits | now eligible |
+| **Banjo** | **Flame Studios 5-string banjo** | a *real* banjo vs ganjo's guitjo compromise; feeds the Backup channel's Roll/Chop | GPL (fine now); GigaStudio .gig needs extraction tooling (`gigextract`) — the one-time tooling also unlocks Greg Sullivan's sets |
+| **Wurlitzer** | Pianobook **WörliTzer** (Decent Sampler ver.) or Greg Sullivan e-pianos (.gig) | fills the Wurli hole next to the new Rhodes | Pianobook DS = .dspreset XML + WAVs, fully extractable; Pianobook license = free use, no redistribution (triage row) |
+| **Keys/synth/organ** | **Pianobook catalog broadly** (1200+ packs; filter to Decent Sampler versions) — organs, synths, felt pianos, EPs | the largest free characterful-instrument pool now that its license is acceptable; audition-driven | per-pack import via .dspreset parsing; add a small dspreset→manifest converter to the pipeline |
+| **Organ** | **Real Rotor Organ** (Indiginus) — a real 1957 Hammond B3 sampled through a *spinning* Leslie at chorale speed, drawbars 688600000, 2nd/3rd percussion, vibrato on/off | the missing organ answer: actual hardware+Leslie beats anything mintable from setBFree for the classic sound; Decent Sampler version = extractable XML+WAV | free from indiginus.com (check exact terms at import → triage row). Import caveat: sustains are *looped* — pre-loop to ~4 s fixed one-shots with a fade during conversion, since the engine ignores loop points |
+| **Acoustic guitar** | (a) **Shinyguitar's acoustic variant** — parked in its zip at the 07-10 import, CC0, re-download; (b) Emilyguitar / OvationGuitar (sfzinstruments) — *wrongly skipped in the 07-10 sweep as "slot covered": the slot is covered only by soundfont renders, no real steel-string multisample exists in the app*; (c) FreePats spanish-classical (real nylon, for Bossa); (d) Pianobook acoustics (browsing trip) | first *real* recorded acoustic; FatBoy render is the default sound of half the styles | (a) is the cheapest — source already vetted, pipeline exists |
+| Skipped despite relaxation | Sennheiser DrumMic'a, MT Power Drums, Ample lites | sealed Kontakt/plugin formats — format wall, not license | — |
+| Skipped | DSK paid tier | license now acceptable but rompler quality won't beat the above | — |
+
+Priority read: Standard Guitar first (electrics remain the stated weakest
+slot), then a DrumGizmo kit for the Kit sound, then banjo/Wurli per Tim's
+appetite. Pianobook is a browsing trip, not a queue item.
+
+## If this ever goes commercial (license triage)
+
+Decision 2026-07-13: non-commercial-only licenses are acceptable **now**;
+this section is the exit map. "Commercial" here includes ads, paid tiers,
+or bundling into paid products — mere donations are a gray zone worth a
+lawyer-minute at the time.
+
+| License | Sets affected | On commercialization |
+|---|---|---|
+| CC0 / public domain | Meatbass, Black And Blue Basses, Swirly Drums, Salamander Drumkit, VCSL, Osiris, Black And Green, Shinyguitar, ganjo, (Caveman Cosmonaut, accordion-HN if imported) | nothing to do |
+| CC BY-SA 3.0 | **FatBoy** (default guitar!) | commercial use OK with attribution; ShareAlike applies to the *samples as redistributed* (already the case). Fine to keep, but note the SA obligation travels. |
+| MIT-ish | Musyng/Fluid renders, Blue Jeans And Moonbeams | fine with license text |
+| **CC-BY-NC** | **jRhodes3** (this import) | **must be removed or replaced before any commercial use.** Nearest replacements: mint a Rhodes-ish set from a FOSS synth (Dexed/Surge), license a commercial Rhodes multisample, or negotiate with the author (jlearman). Keep the set isolated in its own folder (`piano-rhodes/`) so removal is one directory + one `PIANO_SETS` line + one credit line. |
+| GPL (fallback bench only) | Flame Studios banjo (never imported) | redistribution legal with license text; fine commercially but messier — still last resort |
+| "Royalty-free" purchased (DSK, Karoryfer commercial) | none imported | unchanged: fails redistribution regardless of commercial status |
+| **"License-free" (informal)** | **Standard Guitar** (E.Std/E.SMute) | bundled terms say "license-free, no credit required" — permissive but informal, with no explicit redistribution or commercial grant. Before commercial use: email Unreal Instruments for written confirmation, or replace. Isolated in `guitar-standard/` + `guitar-stdmute/` (two `GUITAR_SETS` entries, two trims, one credit line). |
+| **No stated license** | **Ovation Guitar** (A.Ovation) | S. Christian Collins GigaSampler conversion; README credits the author but states no license. Before commercial use: confirm with schristiancollins.com or remove (`guitar-ovation/` + one `GUITAR_SETS` entry + credit line). |
+
+Rule going forward: every non-CC0 import gets its license named in the
+footer credit and a row here.
 
 ## Offbeat expansions (keep in mind)
 

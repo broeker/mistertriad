@@ -6,6 +6,30 @@
 
 - **2026-07-12 17:35 CDT** — Initial plan from UX review session (full-page screenshot of dev build).
 - **2026-07-12 17:40 CDT** — Step 1 shipped: `practice` state hides everything but a sticky transport (Play/Loop/tempo/Fullscreen/Exit) and the chart card; diagrams scale up via CSS (`[&_svg]:w-56`, wider cards, larger chord names); screen wake lock while playing or practicing, re-acquired on visibilitychange; fullscreen toggle. Verified in browser both directions.
+- **2026-07-13 — Band card rows + guitar Fills.** Band panel restructured into
+  rows (Time/Feel; a bordered Guitar+Strum sub-group; Drums/Bass/Backup/Keys;
+  Lead+Mixer); Guitar's off state relabeled "Muted"→"Off" and moved leftmost
+  to match the other instrument rows. New guitar Fills toggle (boom-chick /
+  bluegrass / folk / travis only): on chord changes the guitar drops its
+  last-three-slot strums and picks a 3-step chromatic run into the next
+  chord's root (low strings, mirrors the bass-fill logic; `gfill` events →
+  `scheduleStrum([m],t,{span:'bass'})`). Plumbed through genre presets, set
+  overrides, Copy style, and saved songs. First session under the
+  model-delegation policy (Sonnet layout, Opus scheduler work).
+  Bug found by ear (Tim) and fixed: the runs' chromatic passing tones were
+  never in the preload list (guitar `startNote` is silent, not synth, on
+  undecoded samples), so a note per fill dropped out at chord-dependent
+  beats. Fix: collect `gfillMidis` in buildSchedule and include them in both
+  preload calls. Verified via network log (Ab2/A2/Bb2/Db3 now fetched).
+  Follow-up polish: every instrument group (Drums/Bass/Backup/Keys/Lead) got
+  the same bordered-box treatment as the Guitar+Strum sub-group; Time/Feel
+  stay plain (Haiku-tier delegation, verified). Keys' "Comp + Fills" chip
+  became an Off/Comp + Fills-toggle row like the other instruments (state
+  unchanged: off|on|fills). All four Fills toggles now always render,
+  disabled (40% opacity) instead of hidden when not applicable. Song card is
+  collapsible like Band (open by default; collapsed summary = key · style ·
+  progression name); the chart card deliberately is not. Open: evaluate
+  default instruments/fills per genre and progression (Tim's ear-pass).
 - **2026-07-12 21:30 CDT** — Section suggestions ("Suggest a chorus/bridge…")
   shipped for Country + Blues genres. Curated degree-based catalogs
   (`COUNTRY_IDEAS`/`BLUES_IDEAS` → `SECTION_IDEAS`) named after public-domain
