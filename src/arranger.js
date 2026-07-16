@@ -4,7 +4,7 @@
    No React — Player wraps buildSchedule in a memo and feeds the events to the
    audio scheduler. */
 
-import { QS, isMinorFamily, hasOpenString, voicingKey } from './music.js';
+import { QS, isMinorFamily, voicingKey } from './music.js';
 import { STRING_MIDI, voicingMidis } from './audio.js';
 import {
   METERS, STRUMS, GFILL_STRUMS, DRUM_PATTERNS, BASS_METERS,
@@ -27,19 +27,10 @@ export function leadPool(ch, voicing, strs) {
   return [...new Set(pool)].sort((a,b)=>a-b);
 }
 
-/* ---- Auto string-set path engine ---- */
-// More than one set on = the cross-set voice-leading engine (formerly "Auto").
+/* ---- String-set path helpers ---- */
+// centerOf = the voicing's neck position (mean of lowest-fretted and highest
+// fret); used to order anchor positions. pinKeyOf identifies a pinned voicing.
 export const centerOf=v=>{const nz=v.frets.filter(f=>f>0);return nz.length?(Math.min(...nz)+Math.max(...v.frets))/2:0;};
-const pitchesOf=v=>v.set.strs.map((s,i)=>STRING_MIDI[s]+v.frets[i]);
-// Position-playing cost: staying in the pass's fret window dominates (the hand
-// doesn't drift), with pitch continuity as a soft tiebreaker and only a nudge
-// against changing sets — crossing sets inside the window is the point.
-export const posCost=(v,prev,win)=>{
-  let c=(win!=null?Math.abs(centerOf(v)-win)*3:0)+(hasOpenString(v.frets)?3:0);
-  const pa=[...pitchesOf(v)].sort((x,y)=>x-y),pb=[...pitchesOf(prev)].sort((x,y)=>x-y);
-  let d=0; for (let i=0;i<pa.length;i++) d+=Math.abs(pa[i]-pb[i]);
-  return c+d*0.4+(v.set.key!==prev.set.key?0.5:0);
-};
 export const pinKeyOf=v=>v?`${v.set.key}:${voicingKey(v)}`:'';
 
 // Roll an articulation for a lead note: legato (hammer-on/pull-off) on close

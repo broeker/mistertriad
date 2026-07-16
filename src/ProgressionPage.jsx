@@ -5,7 +5,7 @@ import {
 } from './music.js';
 import FretDiag, { NoteList } from './FretDiag.jsx';
 import { fretWindow } from './fretboard.js';
-import { centerOf, posCost, pinKeyOf } from './arranger.js';
+import { centerOf, pinKeyOf } from './arranger.js';
 import { strum, voicingMidis } from './audio.js';
 
 // Default active string sets (5-4-3 and 6-5-4 off by default, but selectable).
@@ -289,8 +289,8 @@ export default function ProgressionPage() {
     return {notes:nts,root,name:NOTES[root]+QS[p.q].s,numeral:p.numeral,quality:p.q};
   }),[key,prog]);
 
-  // More than one set active → cross-set voice-leading (window-based posCost);
-  // a single set stays put (nearest-fret closestVoicing).
+  // More than one set active → each set contributes its own neck positions
+  // (each pass rides one set); a single set is just nearest-fret closestVoicing.
   const multi=selectedSets.length>1;
   const toggleSet=useCallback(k=>setSelectedSets(cur=>{
     const next=cur.includes(k)?cur.filter(x=>x!==k):[...cur,k];
@@ -310,40 +310,46 @@ export default function ProgressionPage() {
     return out.sort((a,b)=>centerOf(a)-centerOf(b));
   },[selectedSets]);
 
-  // Selectable neck anchors for bar 1, low to high; in multi-set mode voicings
-  // sharing a fret window collapse into one position.
+  // Selectable neck anchors for bar 1, low to high. In multi-set mode each set
+  // contributes its own positions (collapsed within the set), then all are merged
+  // and ordered by neck location — so a lower-fret set never swallows a higher
+  // one, and every active set is reachable via the Position stepper.
   const anchorsFrom=useCallback(cands=>{
     const closed=cands.filter(v=>!hasOpenString(v.frets));
     const list=closed.length?closed:cands;
     if (!multi) return list;
     const out=[];
-    for (const v of list) if (!out.length||centerOf(v)-centerOf(out[out.length-1])>=2) out.push(v);
-    return out;
+    for (const set of STRING_SETS) {
+      let last=null;
+      for (const v of list) if (v.set.key===set.key&&(last===null||centerOf(v)-last>=2)) { out.push(v); last=centerOf(v); }
+    }
+    return out.sort((a,b)=>centerOf(a)-centerOf(b));
   },[multi]);
 
   const positions=useMemo(()=>chords.length?anchorsFrom(candidatesFor(chords[0])):[],[chords,candidatesFor,anchorsFrom]);
   const pi=Math.min(posIdx,Math.max(0,positions.length-1));
 
-  // The voice-led path from the chosen neck anchor: pins force a bar's voicing
+  // The voice-led path from the chosen neck anchor. Pins force a bar's voicing
   // (later bars re-lead from it); repeated chords keep their voicing; otherwise
-  // cross-set posCost (multi) or nearest-fret (single set).
+  // the whole pass rides the anchor's set (nearest-fret within it), so each pass
+  // stays on one set and both sets are reachable via Position. A pin is an island.
   const path=useMemo(()=>{
     if (!chords.length) return [];
     const p=[];
-    let win=null;
+    let passSet=null;
     for (let i=0;i<chords.length;i++){
       const ch=chords[i];
       const cands=candidatesFor(ch);
       if (!cands.length){p.push(null);continue;}
       const pin=pins[i]??null;
       const pinned=pin!=null?cands.find(v=>pinKeyOf(v)===pin):null;
-      if (pinned){p.push(pinned);win=centerOf(pinned);continue;}
+      if (pinned){p.push(pinned);if(i===0)passSet=pinned.set.key;continue;}
       if (i>0&&chords[i-1].root===ch.root&&chords[i-1].quality===ch.quality&&p[i-1]){p.push(p[i-1]);continue;}
-      if (i===0){const list=anchorsFrom(cands);const v=list[Math.min(pi,list.length-1)];p.push(v);win=centerOf(v);continue;}
+      if (i===0){const list=anchorsFrom(cands);const v=list[Math.min(pi,list.length-1)];p.push(v);passSet=v?.set.key;continue;}
       const prev=p[i-1];
       if (!prev){p.push(cands.find(v=>!hasOpenString(v.frets))||cands[0]);continue;}
-      if (multi){let best=null,bs=Infinity;for(const v of cands){const c=posCost(v,prev,win);if(c<bs){bs=c;best=v;}}p.push(best);}
-      else p.push(closestVoicing(cands,prev.frets));
+      const pool=multi&&passSet?cands.filter(v=>v.set.key===passSet):cands;
+      p.push(closestVoicing(pool.length?pool:cands,prev.frets));
     }
     return p;
   },[chords,candidatesFor,anchorsFrom,pins,multi,pi]);
@@ -570,7 +576,7 @@ export default function ProgressionPage() {
       )}
 
       <div className="mt-6 text-xs text-gray-600 border-t border-gray-800 pt-4">
-        <p><strong className="text-gray-500">How to use:</strong> Set chord quality, add chords, and the smoothest path is voice-led for you across the active <strong>string sets</strong> (toggle them, and use <strong>Position</strong> to move the whole path up or down the neck). With more than one set on, each chord picks the voicing that moves your hand the least — crossing between 3-2-1, 4-3-2, 5-4-3, and 6-5-4 the way real position playing does (each chord's card is colored by its set). Click any chord's <strong>Voicings</strong> to pin a specific shape (later chords re-lead from it; <strong>Auto</strong> unpins). Click <strong>Overlay</strong> to see the CAGED chord shape and pentatonic scale around any voicing. 7th chord voicings use shell voicings (root, 3rd/b3rd, 7th) — the 5th is omitted to fit 3 strings.</p>
+        <p><strong className="text-gray-500">How to use:</strong> Set chord quality, add chords, and the smoothest path is voice-led for you across the active <strong>string sets</strong> (toggle them, and use <strong>Position</strong> to move the whole path up or down the neck). With more than one set on, each neck <strong>Position</strong> sits on a single string set, and stepping Positions moves between the sets up and down the neck (each chord's card is colored by its set). Click any chord's <strong>Voicings</strong> to pin a specific shape (later chords re-lead from it; <strong>Auto</strong> unpins). Click <strong>Overlay</strong> to see the CAGED chord shape and pentatonic scale around any voicing. 7th chord voicings use shell voicings (root, 3rd/b3rd, 7th) — the 5th is omitted to fit 3 strings.</p>
       </div>
     </div>
     </div>
