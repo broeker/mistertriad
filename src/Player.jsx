@@ -403,8 +403,10 @@ function leadPool(ch, voicing, strs) {
 // "Auto" searches voicings across these sets and voice-leads between them the
 // way a player crosses sets moving up the neck. 6-5-4 is left out — triads
 // that low read as mud under a band.
-const AUTO_KEY='auto';
-const AUTO_SETS=STRING_SETS.filter(s=>s.key!=='654');
+// Default active string sets: the three movable sets (6-5-4 reads as mud under
+// a band, so it's off by default — but selectable). More than one set on = the
+// cross-set voice-leading engine (formerly "Auto").
+const DEFAULT_SETS=['321','432','543'];
 const centerOf=v=>{const nz=v.frets.filter(f=>f>0);return nz.length?(Math.min(...nz)+Math.max(...v.frets))/2:0;};
 const pitchesOf=v=>v.set.strs.map((s,i)=>STRING_MIDI[s]+v.frets[i]);
 // Position-playing cost: staying in the pass's fret window dominates (the hand
@@ -523,7 +525,10 @@ export default function Player() {
   const [tempo,setTempo]=useState(DEFAULT_SET.tempo);
   const [meter,setMeter]=useState(DEFAULT_SET.meter||'4/4');
   const [view,setView]=useState('cowboy');
-  const [setKeySel,setSetKeySel]=useState(AUTO_KEY);
+  const [selectedSets,setSelectedSets]=useState(()=>{
+    try { const s=JSON.parse(localStorage.getItem('mrtriad.selectedSets')); if (Array.isArray(s)&&s.some(k=>STRING_SETS.some(x=>x.key===k))) return STRING_SETS.filter(x=>s.includes(x.key)).map(x=>x.key); } catch { /* fall through */ }
+    return DEFAULT_SETS;
+  });
   const [loop,setLoop]=useState(true);
   const [feel,setFeel]=useState(DEFAULT_SET.feel);
   const [sound,setSound]=useState('cowboy'); // guitar channel: cowboy | triads | off
@@ -591,27 +596,34 @@ export default function Player() {
   const [posSel,setPosSel]=useState([]); // climb subset (position indices); empty = all
   const [livePass,setLivePass]=useState(0);
   const [pins,setPins]=useState({});
-  const auto=setKeySel===AUTO_KEY;
+  // More than one set active → cross-set voice-leading (the window-based
+  // posCost engine, formerly "Auto"); a single set stays put (closestVoicing).
+  const multi=selectedSets.length>1;
+  useEffect(()=>{ localStorage.setItem('mrtriad.selectedSets',JSON.stringify(selectedSets)); },[selectedSets]);
+  const toggleSet=useCallback(k=>setSelectedSets(cur=>{
+    const next=cur.includes(k)?cur.filter(x=>x!==k):[...cur,k];
+    return next.length?STRING_SETS.filter(s=>next.includes(s.key)).map(s=>s.key):cur; // keep canonical order; never empty
+  }),[]);
 
   // Every voicing for a chord in the current search space, tagged with its set.
   const candidatesFor=useCallback(ch=>{
     const nts=QS[ch.quality].iv.map(iv=>(ch.root+iv)%12);
-    const sets=auto?AUTO_SETS:[STRING_SETS.find(s=>s.key===setKeySel)];
+    const sets=STRING_SETS.filter(s=>selectedSets.includes(s.key));
     const out=[];
     for (const set of sets) for (const v of getVoicings(nts,ch.root,set.strs)) out.push({...v,set});
     return out.sort((a,b)=>centerOf(a)-centerOf(b));
-  },[auto,setKeySel]);
+  },[selectedSets]);
 
   // Selectable anchor positions for bar 1, low to high. In Auto, voicings from
   // different sets that share a fret window collapse into one position.
   const anchorsFrom=useCallback(cands=>{
     const closed=cands.filter(v=>!hasOpenString(v.frets));
     const list=closed.length?closed:cands;
-    if (!auto) return list;
+    if (!multi) return list;
     const out=[];
     for (const v of list) if (!out.length||centerOf(v)-centerOf(out[out.length-1])>=2) out.push(v);
     return out;
-  },[auto]);
+  },[multi]);
 
   const positions=useMemo(()=>chords.length?anchorsFrom(candidatesFor(chords[0])):[],[chords,candidatesFor,anchorsFrom]);
   const pi=Math.min(posIdx,Math.max(0,positions.length-1));
@@ -624,7 +636,13 @@ export default function Player() {
       const cands=candidatesFor(ch);
       if (!cands.length) { path.push(null); continue; }
       const m=flat.map[i];
-      const pin=m?pins[`${m.sec}:${m.j}`]:null;
+      // Pins are keyed per (section:bar:position) in climb/manual, so each
+      // position remembers its own picks; vary keeps a single per-bar pin. A
+      // bare section:bar key (legacy saves, or a vary pin) applies as a fallback
+      // across every position.
+      const pos=posMode==='vary'?null:anchor;
+      const pin=!m?null:(pos==null?(pins[`${m.sec}:${m.j}`]??null)
+                                  :(pins[`${m.sec}:${m.j}:${pos}`]??pins[`${m.sec}:${m.j}`]??null));
       const pinned=pin!=null?cands.find(v=>pinKeyOf(v)===pin):null;
       if (pinned) { path.push(pinned); win=centerOf(pinned); continue; }
       if (i>0&&chords[i-1].root===ch.root&&chords[i-1].quality===ch.quality&&path[i-1]) { path.push(path[i-1]); continue; }
@@ -637,7 +655,7 @@ export default function Player() {
       }
       const prev=path[i-1];
       if (!prev) { path.push(cands.find(v=>!hasOpenString(v.frets))||cands[0]); continue; }
-      if (auto) {
+      if (multi) {
         let best=null,bs=Infinity;
         for (const v of cands){const c=posCost(v,prev,win);if(c<bs){bs=c;best=v;}}
         path.push(best);
@@ -646,7 +664,7 @@ export default function Player() {
       }
     }
     return path;
-  },[chords,flat,candidatesFor,anchorsFrom,pins,auto]);
+  },[chords,flat,candidatesFor,anchorsFrom,pins,multi,posMode]);
 
   // Vary mode: bar 1's same-position shapes (the picker's ±3-fret rule); each
   // pass starts on the next one and re-leads the whole path from it. Rotation
@@ -693,6 +711,12 @@ export default function Player() {
   },[playing,posMode,passOrder,flat.playLen,livePass,loop,passPath]);
   const climbPulse=!!upNext&&flat.playLen>1&&currentBar===flat.playLen-1;
 
+  // Pin key/value for the bar as shown in the currently displayed position.
+  // climb/manual scope pins to that position (displayAnchor); vary keeps one
+  // per-bar pin. barPinVal falls back to a bare per-bar pin (legacy / vary).
+  const barPinKey=i=>posMode==='vary'?`${activeSec}:${i}`:`${activeSec}:${i}:${displayAnchor}`;
+  const barPinVal=i=>posMode==='vary'?pins[`${activeSec}:${i}`]:(pins[barPinKey(i)]??pins[`${activeSec}:${i}`]);
+
   const fretWindow=v=>{
     if (!v) return '';
     const nz=v.frets.filter(f=>f>0);
@@ -702,8 +726,8 @@ export default function Player() {
   const posLabel=useMemo(()=>{
     const v=triadPath[0]; if (!v||!chords.length) return '';
     const z=matchCAGEDZone(chords[0].root,chords[0].quality,v.frets);
-    return `${auto?v.set.label+' · ':''}${fretWindow(v)}${z?` · ${z.name}-shape`:''}`;
-  },[triadPath,chords,auto]);
+    return `${multi?v.set.label+' · ':''}${fretWindow(v)}${z?` · ${z.name}-shape`:''}`;
+  },[triadPath,chords,multi]);
 
   const stop=useCallback(()=>{
     if (playRef.current) { clearInterval(playRef.current.timer); playRef.current=null; }
@@ -1064,15 +1088,16 @@ export default function Player() {
     setPins(ps=>Object.fromEntries(Object.entries(ps).filter(([k])=>!k.startsWith(activeSec+':'))));
     applySetOverrides(p);
   };
-  // Pins are keyed "section:barIndex"; structural edits re-home the active
-  // section's pins and leave other sections' alone.
+  // Pins are keyed "section:barIndex" or "section:barIndex:position"; structural
+  // edits re-home the active section's pins (preserving any position suffix) and
+  // leave other sections' alone.
   const remapPins=fn=>setPins(ps=>{
     const n={};
     for (const [k,v] of Object.entries(ps)) {
-      const ci=k.indexOf(':'), sec=k.slice(0,ci), j=+k.slice(ci+1);
+      const [sec,jStr,...rest]=k.split(':'), j=+jStr;
       if (sec!==activeSec) { n[k]=v; continue; }
       const nj=fn(j);
-      if (nj!=null) n[`${sec}:${nj}`]=v;
+      if (nj!=null) n[[sec,nj,...rest].join(':')]=v;
     }
     return n;
   });
@@ -1429,8 +1454,12 @@ export default function Player() {
           {view==='triads'&&(
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-gray-500 uppercase tracking-wide">Strings</span>
-            <button onClick={()=>setSetKeySel(AUTO_KEY)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${auto?'bg-emerald-600 text-white':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>Auto</button>
-            {STRING_SETS.map(s=>(<button key={s.key} onClick={()=>setSetKeySel(s.key)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${setKeySel===s.key?'bg-emerald-600 text-white':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{s.label}</button>))}
+            {STRING_SETS.map(s=>{
+              const on=selectedSets.includes(s.key);
+              return (<button key={s.key} onClick={()=>toggleSet(s.key)} title={s.names}
+                className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${on?'bg-emerald-600 text-white':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{s.label}</button>);
+            })}
+            <span className="text-[10px] text-gray-500 normal-case">{multi?'voice-leading across sets':'single set'}</span>
           </div>
           )}
           {view==='triads'&&(
@@ -1473,7 +1502,7 @@ export default function Player() {
             return (
               <div key={i} onClick={()=>{ if (view==='triads') { setPickIdx(isPick?null:i); setEditIdx(null); } else setEditIdx(isEdit?null:i); }}
                    className={`relative cursor-pointer rounded-lg border px-2 pt-1.5 pb-2 flex flex-col items-center transition-all min-w-[110px] ${isCur?'border-amber-500 bg-amber-500/10':isEdit||isPick?'border-emerald-500 bg-emerald-500/10':'border-gray-800 bg-gray-950 hover:border-gray-600'}`}>
-                <div className="text-[10px] text-gray-600 self-start">bar {i+1}{view==='triads'&&auto&&triadPath[fi]&&<span className="text-gray-500"> · {triadPath[fi].set.label}</span>}{pins[`${activeSec}:${i}`]!=null&&<span className="text-emerald-500"> · pinned</span>}</div>
+                <div className="text-[10px] text-gray-600 self-start">bar {i+1}{view==='triads'&&multi&&triadPath[fi]&&<span className="text-gray-500"> · {triadPath[fi].set.label}</span>}{barPinVal(i)!=null&&<span className="text-emerald-500"> · pinned</span>}</div>
                 <div className="text-sm font-bold text-amber-400">{ch.name} <span className="text-gray-500 font-normal text-xs">({ch.numeral})</span></div>
                 {view==='cowboy'
                   ? (grips[fi]
@@ -1483,34 +1512,39 @@ export default function Player() {
                       ? <FretDiag voicing={triadPath[fi]} strs={triadPath[fi].set.strs} name={null} root={ch.root} size="small"/>
                       : <div className="text-xs text-gray-600 italic p-4">no voicing</div>)}
                 {isPick&&(()=>{
-                  const all=candidatesFor(ch).filter(v=>!hasOpenString(v.frets));
+                  const all=candidatesFor(ch);
                   if (!all.length) return null;
                   // Same-position shapes only — the Position control owns big
-                  // moves. Fixed sets have one voicing per position, so fall
-                  // back to the full neck when the window leaves <2 choices.
+                  // moves. In a low position we also surface open grips (which
+                  // sit at the nut, outside the ±3 window of a fretted shape):
+                  // that's the "open shapes when down low" behavior. Fixed sets
+                  // have one voicing per position, so fall back to the full neck
+                  // when the window leaves <2 choices.
                   const cur=triadPath[fi];
-                  const near=cur?all.filter(v=>Math.abs(centerOf(v)-centerOf(cur))<=3):all;
+                  const lowPos=cur?centerOf(cur)<=5:true;
+                  const near=cur?all.filter(v=>Math.abs(centerOf(v)-centerOf(cur))<=3||(lowPos&&hasOpenString(v.frets))):all;
                   const vsp=near.length>=2?near:all;
                   const curKey=pinKeyOf(cur);
-                  const pk=`${activeSec}:${i}`;
+                  const pk=barPinKey(i);        // where a pick is written (this position)
+                  const effPin=barPinVal(i);    // effective pin here (incl. legacy fallback)
                   return (
                     <div onClick={e=>e.stopPropagation()} className="absolute z-30 top-full left-0 mt-1.5 p-2 bg-gray-800 border border-emerald-700/60 rounded-lg shadow-2xl w-max max-w-[92vw] cursor-default">
                       <div className="flex items-center justify-between gap-6 mb-1.5">
-                        <span className="text-[10px] text-gray-400">Pick a shape — pins this bar; later bars voice-lead from it</span>
+                        <span className="text-[10px] text-gray-400">Pick a shape — pins this bar{posMode!=='vary'&&positions.length>1?` in position ${displayAnchor+1}`:''}; later bars voice-lead from it</span>
                         <span className="flex gap-3">
                           <button onClick={()=>{setEditIdx(i);setPickIdx(null);}} className="text-[10px] text-gray-400 hover:text-white transition-colors">Edit chord…</button>
                           <button onClick={()=>setPickIdx(null)} className="text-[10px] text-gray-400 hover:text-white transition-colors">✕</button>
                         </span>
                       </div>
                       <div className="flex gap-2 items-start">
-                        <button onClick={()=>remapPins(j=>j===i?null:j)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${pins[pk]==null?'bg-emerald-600 text-white':'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>Auto</button>
+                        <button onClick={()=>setPins(ps=>{const n={...ps};delete n[pk];delete n[`${activeSec}:${i}`];return n;})} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${effPin==null?'bg-emerald-600 text-white':'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>Auto</button>
                         {vsp.map(v=>{
                           const k=pinKeyOf(v);
-                          const pinned=pins[pk]===k,current=k===curKey;
+                          const pinned=effPin===k,current=k===curKey;
                           return (
                             <div key={k} onClick={()=>setPins(ps=>({...ps,[pk]:k}))}
                               className={`cursor-pointer rounded-lg border p-1.5 pb-0.5 flex flex-col items-center transition-all ${pinned?'border-amber-500 bg-amber-500/10':current?'border-emerald-600 bg-emerald-500/10':'border-gray-700 bg-gray-900 hover:border-gray-500'}`}>
-                              <div className={`text-[10px] font-medium ${pinned?'text-amber-400':current?'text-emerald-400':'text-gray-400'}`}>{auto?`${v.set.label} · `:''}{fretWindow(v)}{current&&!pinned?' · playing':''}</div>
+                              <div className={`text-[10px] font-medium ${pinned?'text-amber-400':current?'text-emerald-400':'text-gray-400'}`}>{multi?`${v.set.label} · `:''}{fretWindow(v)}{current&&!pinned?' · playing':''}</div>
                               <FretDiag voicing={v} strs={v.set.strs} name={null} root={ch.root} size="small"/>
                             </div>
                           );
