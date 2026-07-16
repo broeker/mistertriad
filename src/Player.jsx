@@ -726,8 +726,9 @@ export default function Player() {
   const posLabel=useMemo(()=>{
     const v=triadPath[0]; if (!v||!chords.length) return '';
     const z=matchCAGEDZone(chords[0].root,chords[0].quality,v.frets);
-    return `${multi?v.set.label+' · ':''}${fretWindow(v)}${z?` · ${z.name}-shape`:''}`;
-  },[triadPath,chords,multi]);
+    return `${fretWindow(v)}${z?` · ${z.name}-shape`:''}`;
+  },[triadPath,chords]);
+  const posSet=multi?triadPath[0]?.set:null; // colored set token for the Position readout
 
   const stop=useCallback(()=>{
     if (playRef.current) { clearInterval(playRef.current.timer); playRef.current=null; }
@@ -1457,14 +1458,15 @@ export default function Player() {
             {STRING_SETS.map(s=>{
               const on=selectedSets.includes(s.key);
               return (<button key={s.key} onClick={()=>toggleSet(s.key)} title={s.names}
-                className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${on?'bg-emerald-600 text-white':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{s.label}</button>);
+                style={on?{backgroundColor:s.color,color:'#0b0b0b',borderColor:s.color}:undefined}
+                className={`px-2.5 py-1 rounded text-xs font-semibold border border-transparent transition-all ${on?'':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{s.label}</button>);
             })}
             <span className="text-[10px] text-gray-500 normal-case">{multi?'voice-leading across sets':'single set'}</span>
           </div>
           )}
           {view==='triads'&&(
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs text-gray-500 uppercase tracking-wide">Position <span className="normal-case text-gray-600">{positions.length>1?`${displayAnchor+1}/${positions.length} · `:''}{posLabel}</span>{posMode==='vary'&&variants.length>1&&<span className="normal-case text-gray-600"> · shape {(displayVariant??0)+1}/{variants.length}</span>}{upNext&&<span className={`normal-case text-amber-400 ${climbPulse?'animate-pulse':''}`}> → {upNext.anchor+1}</span>}</span>
+            <span className="text-xs text-gray-500 uppercase tracking-wide">Position <span className="normal-case text-gray-600">{positions.length>1?`${displayAnchor+1}/${positions.length} · `:''}{posSet&&<span className="font-semibold" style={{color:posSet.color}}>{posSet.label} · </span>}{posLabel}</span>{posMode==='vary'&&variants.length>1&&<span className="normal-case text-gray-600"> · shape {(displayVariant??0)+1}/{variants.length}</span>}{upNext&&<span className={`normal-case text-amber-400 ${climbPulse?'animate-pulse':''}`}> → {upNext.anchor+1}</span>}</span>
             <button onClick={()=>setPosMode('climb')} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${posMode==='climb'?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>Loop the neck</button>
             <button onClick={()=>setPosMode('manual')} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${posMode==='manual'?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>Manual</button>
             <button onClick={()=>setPosMode('vary')} title="Hold this position, but start each pass on the next same-position shape — the progression re-voiced across neighboring string sets, loop after loop"
@@ -1502,14 +1504,14 @@ export default function Player() {
             return (
               <div key={i} onClick={()=>{ if (view==='triads') { setPickIdx(isPick?null:i); setEditIdx(null); } else setEditIdx(isEdit?null:i); }}
                    className={`relative cursor-pointer rounded-lg border px-2 pt-1.5 pb-2 flex flex-col items-center transition-all min-w-[110px] ${isCur?'border-amber-500 bg-amber-500/10':isEdit||isPick?'border-emerald-500 bg-emerald-500/10':'border-gray-800 bg-gray-950 hover:border-gray-600'}`}>
-                <div className="text-[10px] text-gray-600 self-start">bar {i+1}{view==='triads'&&multi&&triadPath[fi]&&<span className="text-gray-500"> · {triadPath[fi].set.label}</span>}{barPinVal(i)!=null&&<span className="text-emerald-500"> · pinned</span>}</div>
+                <div className="text-[10px] text-gray-600 self-start">bar {i+1}{view==='triads'&&multi&&triadPath[fi]&&<span className="font-semibold" style={{color:triadPath[fi].set.color}}> · {triadPath[fi].set.label}</span>}{barPinVal(i)!=null&&<span className="text-emerald-500"> · pinned</span>}</div>
                 <div className="text-sm font-bold text-amber-400">{ch.name} <span className="text-gray-500 font-normal text-xs">({ch.numeral})</span></div>
                 {view==='cowboy'
                   ? (grips[fi]
                       ? <GripDiag grip={grips[fi]}/>
-                      : (triadPath[fi]?<FretDiag voicing={triadPath[fi]} strs={triadPath[fi].set.strs} name={null} root={ch.root} size="small"/>:<div className="text-xs text-gray-600 italic p-4">no grip</div>))
+                      : (triadPath[fi]?<FretDiag voicing={triadPath[fi]} strs={triadPath[fi].set.strs} name={null} root={ch.root} size="small" accent={triadPath[fi].set.color}/>:<div className="text-xs text-gray-600 italic p-4">no grip</div>))
                   : (triadPath[fi]
-                      ? <FretDiag voicing={triadPath[fi]} strs={triadPath[fi].set.strs} name={null} root={ch.root} size="small"/>
+                      ? <FretDiag voicing={triadPath[fi]} strs={triadPath[fi].set.strs} name={null} root={ch.root} size="small" accent={triadPath[fi].set.color}/>
                       : <div className="text-xs text-gray-600 italic p-4">no voicing</div>)}
                 {isPick&&(()=>{
                   const all=candidatesFor(ch);
@@ -1544,8 +1546,8 @@ export default function Player() {
                           return (
                             <div key={k} onClick={()=>setPins(ps=>({...ps,[pk]:k}))}
                               className={`cursor-pointer rounded-lg border p-1.5 pb-0.5 flex flex-col items-center transition-all ${pinned?'border-amber-500 bg-amber-500/10':current?'border-emerald-600 bg-emerald-500/10':'border-gray-700 bg-gray-900 hover:border-gray-500'}`}>
-                              <div className={`text-[10px] font-medium ${pinned?'text-amber-400':current?'text-emerald-400':'text-gray-400'}`}>{multi?`${v.set.label} · `:''}{fretWindow(v)}{current&&!pinned?' · playing':''}</div>
-                              <FretDiag voicing={v} strs={v.set.strs} name={null} root={ch.root} size="small"/>
+                              <div className={`text-[10px] font-medium ${pinned?'text-amber-400':current?'text-emerald-400':'text-gray-400'}`}>{multi&&<span className="font-semibold" style={{color:v.set.color}}>{v.set.label} · </span>}{fretWindow(v)}{current&&!pinned?' · playing':''}</div>
+                              <FretDiag voicing={v} strs={v.set.strs} name={null} root={ch.root} size="small" accent={v.set.color}/>
                             </div>
                           );
                         })}
@@ -1558,9 +1560,9 @@ export default function Player() {
           })}
           {view==='triads'&&upNext?.path[0]&&(
             <div className={`rounded-lg border border-dashed px-2 pt-1.5 pb-2 flex flex-col items-center min-w-[110px] transition-all ${climbPulse?'border-amber-400 ring-1 ring-amber-400/70 animate-pulse':'border-gray-600'}`}>
-              <div className="text-[10px] text-amber-400/90 self-start">next loop · {posMode==='vary'?upNext.path[0].set.label:`pos ${upNext.anchor+1}`} · {fretWindow(upNext.path[0])}</div>
+              <div className="text-[10px] text-amber-400/90 self-start">next loop · {posMode==='vary'?<span className="font-semibold" style={{color:upNext.path[0].set.color}}>{upNext.path[0].set.label}</span>:`pos ${upNext.anchor+1}`} · {fretWindow(upNext.path[0])}</div>
               <div className="text-sm font-bold text-amber-400">{chords[0].name} <span className="text-gray-500 font-normal text-xs">({chords[0].numeral})</span></div>
-              <FretDiag voicing={upNext.path[0]} strs={upNext.path[0].set.strs} name={null} root={chords[0].root} size="small"/>
+              <FretDiag voicing={upNext.path[0]} strs={upNext.path[0].set.strs} name={null} root={chords[0].root} size="small" accent={upNext.path[0].set.color}/>
             </div>
           )}
           {!bars.length&&(

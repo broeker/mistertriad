@@ -11,12 +11,16 @@ export const SETS = {
 };
 
 // All adjacent 3-string sets, used by the triad finder.
+// color: per-set hue for the UI's color language (chips, card labels, picker,
+// and the diagram's position badge). Warm→cool by pitch; kept clear of the
+// amber(root)/blue(non-root) used inside the diagrams.
 export const STRING_SETS = [
-  { key:'321', strs:[3,2,1], label:'3-2-1', names:'G B E' },
-  { key:'432', strs:[4,3,2], label:'4-3-2', names:'D G B' },
-  { key:'543', strs:[5,4,3], label:'5-4-3', names:'A D G' },
-  { key:'654', strs:[6,5,4], label:'6-5-4', names:'E A D' },
+  { key:'321', strs:[3,2,1], label:'3-2-1', names:'G B E', color:'#38bdf8' },
+  { key:'432', strs:[4,3,2], label:'4-3-2', names:'D G B', color:'#c084fc' },
+  { key:'543', strs:[5,4,3], label:'5-4-3', names:'A D G', color:'#fb7185' },
+  { key:'654', strs:[6,5,4], label:'6-5-4', names:'E A D', color:'#a3e635' },
 ];
+export const setColor = k => STRING_SETS.find(s=>s.key===k)?.color || '#fbbf24';
 
 export const SCALE = [0,2,4,5,7,9,11];
 export const DEGS = [

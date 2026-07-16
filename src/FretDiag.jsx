@@ -13,7 +13,12 @@ export function GripDiag({grip}) {
   const pw=w-m.l-m.r,ph=h-m.t-m.b,ss=pw/5,fs=ph/nFrets;
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
-      {hasNut?<line x1={m.l-2} y1={m.t} x2={m.l+pw+2} y2={m.t} stroke="#e5e7eb" strokeWidth={3}/>:<text x={m.l-18} y={m.t+fs/2+3} fontSize="8" fill="#9ca3af" textAnchor="middle">{minNZ}fr</text>}
+      {hasNut
+        ? <line x1={m.l-2} y1={m.t} x2={m.l+pw+2} y2={m.t} stroke="#e5e7eb" strokeWidth={3}/>
+        : (<g>
+            <rect x={m.l-30} y={m.t+fs/2-9} width={27} height={17} rx={4} fill="#fbbf24" fillOpacity={0.2} stroke="#fbbf24" strokeOpacity={0.6} strokeWidth={1}/>
+            <text x={m.l-16.5} y={m.t+fs/2+0.5} fontSize="10" fill="#fbbf24" textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{minNZ}fr</text>
+          </g>)}
       {Array.from({length:nFrets+1},(_,i)=>(<line key={i} x1={m.l} y1={m.t+i*fs} x2={m.l+pw} y2={m.t+i*fs} stroke={i===0&&hasNut?"#e5e7eb":"#4b5563"} strokeWidth={i===0&&hasNut?3:1}/>))}
       {cols.map((c,i)=>(<line key={c.s} x1={m.l+i*ss} y1={m.t} x2={m.l+i*ss} y2={m.t+nFrets*fs} stroke="#6b7280" strokeWidth={c.s>=4?1.2:0.9}/>))}
       {cols.map((c,i)=>(<text key={c.s} x={m.l+i*ss} y={m.t-24} fontSize="8" fill="#9ca3af" textAnchor="middle" fontFamily="monospace">{SNAME[c.s]}</text>))}
@@ -33,7 +38,7 @@ export function GripDiag({grip}) {
 }
 
 /* ---- Chord Diagram ---- */
-export default function FretDiag({voicing,strs,name,highlight,onClick,size="normal",setLabel,root}) {
+export default function FretDiag({voicing,strs,name,highlight,onClick,size="normal",setLabel,root,accent="#fbbf24"}) {
   if (!voicing) return (
     <div className="flex flex-col items-center">
       {name&&<div className="text-sm font-bold text-amber-400 mb-1">{name}</div>}
@@ -57,10 +62,15 @@ export default function FretDiag({voicing,strs,name,highlight,onClick,size="norm
       {setLabel&&<div className="text-xs text-emerald-400 mb-0.5">{setLabel}</div>}
       <div className={`rounded-lg mt-1.5 transition-all ${highlight?'bg-amber-500/10 p-3':'p-0'} ${border}`}>
         <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
-          {hasNut?<line x1={m.l-2} y1={m.t} x2={m.l+pw+2} y2={m.t} stroke="#e5e7eb" strokeWidth={3}/>:<text x={m.l-24} y={m.t+fs/2+4} fontSize="9" fill="#9ca3af" textAnchor="middle">{minNZ}fr</text>}
+          {hasNut
+            ? <line x1={m.l-2} y1={m.t} x2={m.l+pw+2} y2={m.t} stroke="#e5e7eb" strokeWidth={3}/>
+            : (<g>
+                <rect x={m.l-33} y={m.t+fs/2-9} width={29} height={17} rx={4} fill={accent} fillOpacity={0.2} stroke={accent} strokeOpacity={0.6} strokeWidth={1}/>
+                <text x={m.l-18.5} y={m.t+fs/2+0.5} fontSize={sm?10:11} fill={accent} textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{minNZ}fr</text>
+              </g>)}
           {Array.from({length:nFrets+1},(_,i)=>(<line key={i} x1={m.l} y1={m.t+i*fs} x2={m.l+pw} y2={m.t+i*fs} stroke={i===0&&hasNut?"#e5e7eb":"#4b5563"} strokeWidth={i===0&&hasNut?3:1}/>))}
           {[0,1,2].map(i=>(<line key={i} x1={m.l+i*ss} y1={m.t} x2={m.l+i*ss} y2={m.t+nFrets*fs} stroke="#6b7280" strokeWidth={1.2}/>))}
-          {strs.map((s,i)=>(<text key={s} x={m.l+i*ss} y={m.t-22} fontSize={sm?"9":"11"} fill="#9ca3af" textAnchor="middle" fontFamily="monospace">{SNAME[s]}</text>))}
+          {strs.map((s,i)=>(<text key={s} x={m.l+i*ss} y={m.t-22} fontSize={sm?"10":"11"} fill="#d1d5db" textAnchor="middle" fontFamily="monospace" fontWeight="bold">{SNAME[s]}</text>))}
           {frets.map((f,i)=>{
             const isRoot=rootIdx.includes(i);
             const iv=root!==undefined?((notes[i]-root+12)%12):null;
@@ -72,7 +82,7 @@ export default function FretDiag({voicing,strs,name,highlight,onClick,size="norm
           })}
         </svg>
       </div>
-      <div className="text-xs text-gray-500 mt-2.5">({notes.map((n,j)=>{const nn=NOTES[n];return rootIdx.includes(j)?<strong key={j} className="text-gray-300">{nn}</strong>:nn;}).reduce((acc,el,j)=>j===0?[el]:[...acc,'-',el],[])}) Frets: {frets.join('-')}</div>
+      <div className="text-xs text-gray-300 mt-2.5">({notes.map((n,j)=>{const nn=NOTES[n];return rootIdx.includes(j)?<strong key={j} className="text-white">{nn}</strong>:nn;}).reduce((acc,el,j)=>j===0?[el]:[...acc,'-',el],[])}) <span className="text-gray-400">Frets:</span> <span className="font-semibold tabular-nums">{frets.join('-')}</span></div>
     </div>
   );
 }
