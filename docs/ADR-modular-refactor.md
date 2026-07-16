@@ -61,6 +61,11 @@ Behavior-preserving structural refactor only. No functional changes.
   model.** These carry real regression risk and were out of scope for a
   behavior-preserving pass.
 
+> **Revision 2026-07-16 15:05:** `SETS` has since been retired — the Progression
+> page was migrated to the unified `STRING_SETS` cross-set engine as a follow-up
+> feature (see [ADR-progression-crossset](ADR-progression-crossset.md)). The
+> `useReducer` migration remains deferred.
+
 ## Consequences
 
 | File | Before | After |

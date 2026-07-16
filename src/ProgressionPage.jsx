@@ -1,14 +1,22 @@
 import { useState, useMemo, useCallback } from "react";
 import {
-  NOTES, OPEN, SNAME, SETS, SCALE, DEGS, QS, QKEYS, IV_LABEL,
-  getVoicings, closestVoicing, hasOpenString, rootStrLabel, voicingKey, matchCAGED,
+  NOTES, OPEN, SNAME, STRING_SETS, SCALE, DEGS, QS, QKEYS, IV_LABEL,
+  getVoicings, closestVoicing, hasOpenString, rootStrLabel, matchCAGED, matchCAGEDZone,
 } from './music.js';
 import FretDiag, { NoteList } from './FretDiag.jsx';
 import { fretWindow } from './fretboard.js';
+import { centerOf, posCost, pinKeyOf } from './arranger.js';
 import { strum, voicingMidis } from './audio.js';
 
-// Short string-set label derived from the set's strings: s1 -> "3-2-1".
-const setShort = sk => SETS[sk].strs.join('-');
+// Default active string sets (6-5-4 off by default — reads low/muddy — but selectable).
+const DEFAULT_SETS = ['321','432','543'];
+// Fret-range label for the Position readout, e.g. "frets 3–5".
+const fretRangeLabel = v => {
+  if (!v) return '';
+  const nz=v.frets.filter(f=>f>0);
+  const lo=nz.length?Math.min(...nz):0, hi=Math.max(...v.frets);
+  return lo===hi?`fret ${lo}`:`frets ${lo}–${hi}`;
+};
 
 function getShapeChordNotes(cr) {
   if (!cr) return [];
@@ -136,11 +144,10 @@ function Arrow({dist}) {
 function shiftLabel(d) { return d===0?'—':d>0?`↑${d}`:`↓${Math.abs(d)}`; }
 
 /* ---- Print Preview ---- */
-function PrintPreview({chords,path,pathSets,distances,keyName,onClose}) {
+function PrintPreview({chords,path,distances,keyName,onClose}) {
   const allOverlays=chords.map((ch,i)=>{
     if (!path[i]) return null;
-    const sk=pathSets[i];
-    return computeOverlay(ch.root,ch.quality,path[i],SETS[sk].strs);
+    return computeOverlay(ch.root,ch.quality,path[i],path[i].set.strs);
   });
 
   return (
@@ -170,9 +177,9 @@ function PrintPreview({chords,path,pathSets,distances,keyName,onClose}) {
         <div className="text-xs font-semibold text-gray-700 mb-2">Chord Voicings</div>
         <div className="flex flex-wrap items-start gap-1.5 mb-6">
           {chords.map((ch,i)=>{
-            const sk=pathSets[i],v=path[i];
+            const v=path[i];
             if (!v) return null;
-            const strs=SETS[sk].strs,{frets,notes,rootIdx}=v;
+            const strs=v.set.strs,{frets,notes,rootIdx}=v;
             const {minNZ,startF,nFrets:nFr,hasNut}=fretWindow(frets);
             const cw=100,ch2=130,mg={t:36,b:10,l:32,r:14};
             const pw=cw-mg.l-mg.r,ph=ch2-mg.t-mg.b,ss=pw/2,fs2=ph/nFr;
@@ -180,7 +187,7 @@ function PrintPreview({chords,path,pathSets,distances,keyName,onClose}) {
               <div key={i} className="flex items-start">
                 <div className="flex flex-col items-center">
                   <div className="text-[11px] font-bold text-amber-700 mb-0.5">{ch.name} ({ch.numeral})</div>
-                  <div className="text-[8px] text-emerald-700">{setShort(sk)}</div>
+                  <div className="text-[8px] text-emerald-700">{v.set.label}</div>
                   <svg width={cw} height={ch2} viewBox={`0 0 ${cw} ${ch2}`}>
                     {hasNut?<line x1={mg.l-2} y1={mg.t} x2={mg.l+pw+2} y2={mg.t} stroke="#111" strokeWidth={3}/>:<text x={mg.l-20} y={mg.t+fs2/2+3} fontSize="8" fill="#666" textAnchor="middle">{minNZ}fr</text>}
                     {Array.from({length:nFr+1},(_,j)=>(<line key={j} x1={mg.l} y1={mg.t+j*fs2} x2={mg.l+pw} y2={mg.t+j*fs2} stroke={j===0&&hasNut?'#111':'#bbb'} strokeWidth={j===0&&hasNut?3:0.5}/>))}
@@ -221,15 +228,15 @@ function PrintPreview({chords,path,pathSets,distances,keyName,onClose}) {
           </thead>
           <tbody>
             {chords.map((ch,i)=>{
-              const v=path[i],sk=pathSets[i];
+              const v=path[i];
               if (!v) return null;
               return (
                 <tr key={i} className="border-b border-gray-200">
                   <td className="py-1 pr-2 font-bold text-amber-700">{ch.name}</td>
-                  <td className="py-1 pr-2 text-emerald-700">{setShort(sk)}</td>
+                  <td className="py-1 pr-2 text-emerald-700">{v.set.label}</td>
                   <td className="py-1 pr-2">{v.notes.map(n=>NOTES[n]).join(', ')}</td>
                   <td className="py-1 pr-2 font-mono">{v.frets.join('-')}</td>
-                  <td className="py-1 pr-2">{v.inv+rootStrLabel(v,SETS[sk].strs)}</td>
+                  <td className="py-1 pr-2">{v.inv+rootStrLabel(v,v.set.strs)}</td>
                   <td className="py-1">{i===0?'—':distances[i-1]!==null?shiftLabel(distances[i-1]):'—'}</td>
                 </tr>
               );
@@ -269,9 +276,10 @@ export default function ProgressionPage() {
   const [key,setKey]=useState(0);
   const [prog,setProg]=useState([]);
   const [selectedQuality,setSelectedQuality]=useState('maj');
-  const [startChoice,setStartChoice]=useState({setKey:'s1',voicingIdx:-1});
-  const [overrides,setOverrides]=useState({});
-  const [showAltIdx,setShowAltIdx]=useState(null);
+  const [selectedSets,setSelectedSets]=useState(DEFAULT_SETS);
+  const [posIdx,setPosIdx]=useState(0);
+  const [pins,setPins]=useState({}); // {barIndex: pinKey}
+  const [pickIdx,setPickIdx]=useState(null); // bar whose voicing picker is open
   const [shownSecondHelper,setShownSecondHelper]=useState(false);
   const [overlayIdx,setOverlayIdx]=useState(null);
   const [printMode,setPrintMode]=useState(false);
@@ -281,50 +289,71 @@ export default function ProgressionPage() {
     return {notes:nts,root,name:NOTES[root]+QS[p.q].s,numeral:p.numeral,quality:p.q};
   }),[key,prog]);
 
-  const firstVoicings=useMemo(()=>{
-    if (!chords.length) return {s1:[],s2:[]};
-    return {s1:getVoicings(chords[0].notes,chords[0].root,SETS.s1.strs),s2:getVoicings(chords[0].notes,chords[0].root,SETS.s2.strs)};
-  },[chords]);
+  // More than one set active → cross-set voice-leading (window-based posCost);
+  // a single set stays put (nearest-fret closestVoicing).
+  const multi=selectedSets.length>1;
+  const toggleSet=useCallback(k=>setSelectedSets(cur=>{
+    const next=cur.includes(k)?cur.filter(x=>x!==k):[...cur,k];
+    return next.length?STRING_SETS.filter(s=>next.includes(s.key)).map(s=>s.key):cur; // keep canonical order; never empty
+  }),[]);
 
   const resetAll=useCallback(()=>{
-    setStartChoice({setKey:'s1',voicingIdx:-1});setOverrides({});setShowAltIdx(null);setOverlayIdx(null);
+    setPosIdx(0);setPins({});setPickIdx(null);setOverlayIdx(null);
   },[]);
 
-  const selectedStart=useMemo(()=>{
-    const vs=firstVoicings[startChoice.setKey];
-    if (!vs.length) return null;
-    if (startChoice.voicingIdx>=0) return vs[startChoice.voicingIdx]||vs[0];
-    const nonOpen=vs.find(v=>!hasOpenString(v.frets));
-    return nonOpen||vs[0];
-  },[firstVoicings,startChoice]);
+  // Every voicing for a chord across the active sets, tagged with its set.
+  const candidatesFor=useCallback(ch=>{
+    const nts=QS[ch.quality].iv.map(iv=>(ch.root+iv)%12);
+    const out=[];
+    for (const set of STRING_SETS.filter(s=>selectedSets.includes(s.key)))
+      for (const v of getVoicings(nts,ch.root,set.strs)) out.push({...v,set});
+    return out.sort((a,b)=>centerOf(a)-centerOf(b));
+  },[selectedSets]);
 
-  const startSet=startChoice.setKey;
+  // Selectable neck anchors for bar 1, low to high; in multi-set mode voicings
+  // sharing a fret window collapse into one position.
+  const anchorsFrom=useCallback(cands=>{
+    const closed=cands.filter(v=>!hasOpenString(v.frets));
+    const list=closed.length?closed:cands;
+    if (!multi) return list;
+    const out=[];
+    for (const v of list) if (!out.length||centerOf(v)-centerOf(out[out.length-1])>=2) out.push(v);
+    return out;
+  },[multi]);
 
-  const {path,pathSets}=useMemo(()=>{
-    if (!chords.length||!selectedStart) return {path:[],pathSets:[]};
-    const firstV=overrides[0]?overrides[0].voicing:selectedStart;
-    const firstS=overrides[0]?overrides[0].setKey:startSet;
-    const p=[firstV],ps=[firstS];
-    for (let i=1;i<chords.length;i++){
-      const ch=chords[i],prev=p[i-1];
-      if (!prev){p.push(null);ps.push(ps[i-1]);continue;}
-      if (overrides[i]){p.push(overrides[i].voicing);ps.push(overrides[i].setKey);}
-      else {const prevSet=ps[i-1];const vs=getVoicings(ch.notes,ch.root,SETS[prevSet].strs);p.push(closestVoicing(vs,prev.frets));ps.push(prevSet);}
+  const positions=useMemo(()=>chords.length?anchorsFrom(candidatesFor(chords[0])):[],[chords,candidatesFor,anchorsFrom]);
+  const pi=Math.min(posIdx,Math.max(0,positions.length-1));
+
+  // The voice-led path from the chosen neck anchor: pins force a bar's voicing
+  // (later bars re-lead from it); repeated chords keep their voicing; otherwise
+  // cross-set posCost (multi) or nearest-fret (single set).
+  const path=useMemo(()=>{
+    if (!chords.length) return [];
+    const p=[];
+    let win=null;
+    for (let i=0;i<chords.length;i++){
+      const ch=chords[i];
+      const cands=candidatesFor(ch);
+      if (!cands.length){p.push(null);continue;}
+      const pin=pins[i]??null;
+      const pinned=pin!=null?cands.find(v=>pinKeyOf(v)===pin):null;
+      if (pinned){p.push(pinned);win=centerOf(pinned);continue;}
+      if (i>0&&chords[i-1].root===ch.root&&chords[i-1].quality===ch.quality&&p[i-1]){p.push(p[i-1]);continue;}
+      if (i===0){const list=anchorsFrom(cands);const v=list[Math.min(pi,list.length-1)];p.push(v);win=centerOf(v);continue;}
+      const prev=p[i-1];
+      if (!prev){p.push(cands.find(v=>!hasOpenString(v.frets))||cands[0]);continue;}
+      if (multi){let best=null,bs=Infinity;for(const v of cands){const c=posCost(v,prev,win);if(c<bs){bs=c;best=v;}}p.push(best);}
+      else p.push(closestVoicing(cands,prev.frets));
     }
-    return {path:p,pathSets:ps};
-  },[chords,selectedStart,startSet,overrides]);
+    return p;
+  },[chords,candidatesFor,anchorsFrom,pins,multi,pi]);
 
-  const altVoicings=useMemo(()=>chords.map((ch,i)=>{
-    if (i>0&&!path[i-1]) return [];
-    const currSet=pathSets[i],currV=path[i],alts=[];
-    const vsSame=getVoicings(ch.notes,ch.root,SETS[currSet].strs);
-    for (const v of vsSame){if(currV&&voicingKey(v)===voicingKey(currV)) continue;alts.push({voicing:v,setKey:currSet});}
-    const otherSet=currSet==='s1'?'s2':'s1';
-    for (const v of getVoicings(ch.notes,ch.root,SETS[otherSet].strs)) alts.push({voicing:v,setKey:otherSet});
-    const sortKey=v=>{const nz=v.frets.filter(f=>f>0);return nz.length?Math.min(...nz):0;};
-    alts.sort((a,b)=>sortKey(a.voicing)-sortKey(b.voicing)||a.voicing.pos-b.voicing.pos);
-    return alts;
-  }),[chords,path,pathSets]);
+  const posSet=path[0]?.set||null;
+  const posLabel=useMemo(()=>{
+    const v=path[0]; if (!v||!chords.length) return '';
+    const z=matchCAGEDZone(chords[0].root,chords[0].quality,v.frets);
+    return `${fretRangeLabel(v)}${z?` · ${z.name}-shape`:''}`;
+  },[path,chords]);
 
   const distances=useMemo(()=>{
     const minFret=f=>{const nz=f.filter(x=>x>0);return nz.length?Math.min(...nz):0;};
@@ -338,17 +367,23 @@ export default function ProgressionPage() {
 
   const overlayData=useMemo(()=>{
     if (overlayIdx===null||overlayIdx>=chords.length||!path[overlayIdx]) return null;
-    const ch=chords[overlayIdx],sk=pathSets[overlayIdx];
-    return computeOverlay(ch.root,ch.quality,path[overlayIdx],SETS[sk].strs);
-  },[overlayIdx,chords,path,pathSets]);
+    const ch=chords[overlayIdx];
+    return computeOverlay(ch.root,ch.quality,path[overlayIdx],path[overlayIdx].set.strs);
+  },[overlayIdx,chords,path]);
 
   const addChord=deg=>{const d=DEGS[deg];setProg(p=>{if(p.length>=1)setShownSecondHelper(true);return[...p,{deg:d.i,q:selectedQuality,numeral:d.n}];});};
-  const removeChord=idx=>{setProg(p=>p.filter((_,i)=>i!==idx));if(idx===0)resetAll();setOverrides(prev=>{const n={};Object.entries(prev).forEach(([k,v])=>{const ki=parseInt(k);if(ki<idx)n[ki]=v;else if(ki>idx)n[ki-1]=v;});return n;});setShowAltIdx(null);setOverlayIdx(null);};
-  const selectAlt=(ci,alt)=>{setOverrides(prev=>{const n={...prev};Object.keys(n).forEach(k=>{if(parseInt(k)>ci)delete n[k];});n[ci]=alt;return n;});setShowAltIdx(null);};
-  const clearAltOverride=ci=>{setOverrides(prev=>{const n={...prev};delete n[ci];Object.keys(n).forEach(k=>{if(parseInt(k)>ci)delete n[k];});return n;});setShowAltIdx(null);};
+  // Re-home pins across a bar removal (indices shift); drop the removed bar's pin.
+  const removeChord=idx=>{
+    setProg(p=>p.filter((_,i)=>i!==idx));
+    if(idx===0)resetAll();
+    setPins(prev=>{const n={};Object.entries(prev).forEach(([k,v])=>{const ki=parseInt(k);if(ki<idx)n[ki]=v;else if(ki>idx)n[ki-1]=v;});return n;});
+    setPickIdx(null);setOverlayIdx(null);
+  };
+  const pinBar=(ci,v)=>{setPins(prev=>({...prev,[ci]:pinKeyOf(v)}));setPickIdx(null);};
+  const unpinBar=ci=>setPins(prev=>{const n={...prev};delete n[ci];return n;});
 
   if (printMode && chords.length>0 && path.length>0) {
-    return <PrintPreview chords={chords} path={path} pathSets={pathSets} distances={distances} keyName={NOTES[key]} onClose={()=>setPrintMode(false)}/>;
+    return <PrintPreview chords={chords} path={path} distances={distances} keyName={NOTES[key]} onClose={()=>setPrintMode(false)}/>;
   }
 
   return (
@@ -418,19 +453,40 @@ export default function ProgressionPage() {
               <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-full bg-amber-500"></span> Root</span>
               <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-full bg-blue-500"></span> Other notes</span>
             </div>
+            <div className="mb-3 flex flex-wrap items-center gap-x-6 gap-y-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs text-gray-500 uppercase tracking-wide">Strings</span>
+                {STRING_SETS.map(s=>{
+                  const on=selectedSets.includes(s.key);
+                  return (<button key={s.key} onClick={()=>{toggleSet(s.key);setPickIdx(null);}} title={s.names}
+                    style={on?{backgroundColor:s.color,color:'#0b0b0b',borderColor:s.color}:undefined}
+                    className={`px-2.5 py-1 rounded text-xs font-semibold border border-transparent transition-all ${on?'':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{s.label}</button>);
+                })}
+                <span className="text-[10px] text-gray-500 normal-case">{multi?'voice-leading across sets':'single set'}</span>
+              </div>
+              {positions.length>0&&(
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-gray-500 uppercase tracking-wide">Position <span className="normal-case text-gray-600">{positions.length>1?`${pi+1}/${positions.length} · `:''}{posSet&&<span className="font-semibold" style={{color:posSet.color}}>{posSet.label} · </span>}{posLabel}</span></span>
+                  <button onClick={()=>setPosIdx(Math.max(0,pi-1))} disabled={pi<=0} title="Move the whole progression lower on the neck" className="px-2.5 py-1 rounded text-xs font-medium bg-gray-800 text-gray-300 hover:bg-gray-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed">▼</button>
+                  <button onClick={()=>setPosIdx(Math.min(positions.length-1,pi+1))} disabled={pi>=positions.length-1} title="Move the whole progression higher on the neck" className="px-2.5 py-1 rounded text-xs font-medium bg-gray-800 text-gray-300 hover:bg-gray-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed">▲</button>
+                </div>
+              )}
+            </div>
             <div className="flex items-start flex-wrap gap-y-4">
               {chords.map((ch,i)=>{
-                const currSet=pathSets[i],isOverridden=!!overrides[i];
+                // Pinned badge reflects the pin actually in effect: if its set was
+                // toggled off, the pin is dormant (restored when the set returns).
+                const v=path[i],isPinned=!!v&&pins[i]!=null&&pinKeyOf(v)===pins[i];
                 return (
                   <div key={i} className="flex items-start">
                     <div className="flex flex-col items-center">
-                      <FretDiag voicing={path[i]} strs={currSet?SETS[currSet].strs:SETS.s1.strs} name={ch.name+' ('+ch.numeral+')'} highlight={isOverridden} onClick={altVoicings[i]?.length>0?()=>setShowAltIdx(showAltIdx===i?null:i):undefined} setLabel={currSet?setShort(currSet):null} root={ch.root}/>
+                      <FretDiag voicing={v} strs={v?v.set.strs:undefined} name={ch.name+' ('+ch.numeral+')'} highlight={isPinned} onClick={()=>setPickIdx(pickIdx===i?null:i)} setLabel={v?v.set.label:null} accent={v?v.set.color:undefined} root={ch.root}/>
                       <div className="flex flex-col items-center gap-1 mt-1.5">
-                        {altVoicings[i]?.length>0&&(
-                          <button onClick={()=>setShowAltIdx(showAltIdx===i?null:i)} className={`px-3 py-1 rounded-md text-xs font-medium transition-all duration-200 w-full ${showAltIdx===i?'bg-emerald-600 text-white border border-emerald-500 shadow-lg shadow-emerald-500/30':isOverridden?'bg-amber-500 text-gray-900 border border-amber-400 hover:bg-amber-400':'bg-emerald-700 text-emerald-100 hover:bg-emerald-500 hover:text-white border border-emerald-600 hover:border-emerald-400'}`}>Alt voicing</button>
+                        {v&&(
+                          <button onClick={()=>setPickIdx(pickIdx===i?null:i)} className={`px-3 py-1 rounded-md text-xs font-medium transition-all duration-200 w-full ${pickIdx===i?'bg-emerald-600 text-white border border-emerald-500 shadow-lg shadow-emerald-500/30':isPinned?'bg-amber-500 text-gray-900 border border-amber-400 hover:bg-amber-400':'bg-emerald-700 text-emerald-100 hover:bg-emerald-500 hover:text-white border border-emerald-600 hover:border-emerald-400'}`}>{isPinned?'Pinned':'Voicings'}</button>
                         )}
-                        {path[i]&&(
-                          <button onClick={()=>strum(voicingMidis(SETS[currSet].strs,path[i].frets))} className="px-3 py-1 rounded-md text-xs font-medium bg-gray-800 text-gray-300 border border-gray-700 hover:bg-amber-500 hover:text-gray-900 hover:border-amber-400 transition-all duration-200 w-full">▶ Play</button>
+                        {v&&(
+                          <button onClick={()=>strum(voicingMidis(v.set.strs,v.frets))} className="px-3 py-1 rounded-md text-xs font-medium bg-gray-800 text-gray-300 border border-gray-700 hover:bg-amber-500 hover:text-gray-900 hover:border-amber-400 transition-all duration-200 w-full">▶ Play</button>
                         )}
                         {path[i]&&(
                           <button onClick={()=>setOverlayIdx(overlayIdx===i?null:i)} className={`px-3 py-1 rounded-md text-xs font-medium transition-all duration-200 w-full ${overlayIdx===i?'bg-emerald-600 text-white border border-emerald-500 shadow-lg shadow-emerald-500/30':'bg-emerald-700 text-emerald-100 hover:bg-emerald-500 hover:text-white border border-emerald-600 hover:border-emerald-400 hover:shadow-lg hover:shadow-emerald-500/30 hover:scale-105'}`}>Overlay</button>
@@ -444,37 +500,47 @@ export default function ProgressionPage() {
               })}
             </div>
 
-            {showAltIdx!==null&&showAltIdx<chords.length&&altVoicings[showAltIdx]?.length>0&&(
-              <div className="mt-4 p-3 bg-gray-800 rounded-lg border border-emerald-700/50">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-xs text-emerald-400">Alternative voicings for <span className="font-bold">{chords[showAltIdx].name}</span> (lowest to highest fret)</div>
-                  {overrides[showAltIdx]&&<button onClick={()=>clearAltOverride(showAltIdx)} className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Reset to default</button>}
-                </div>
-                {['s1','s2'].map(sk=>{
-                  const groupAlts=altVoicings[showAltIdx].filter(a=>a.setKey===sk);
-                  if (!groupAlts.length) return null;
-                  return (
-                    <div key={sk} className="mb-3">
-                      <div className="text-xs text-emerald-400 font-medium mb-2">{SETS[sk].label}</div>
-                      <div className="flex flex-wrap gap-3">
-                        {groupAlts.map((alt,i)=>(
-                          <div key={i} className="flex flex-col items-center">
-                            <FretDiag voicing={alt.voicing} strs={SETS[alt.setKey].strs} name={null} highlight={overrides[showAltIdx]?.voicing===alt.voicing} onClick={()=>selectAlt(showAltIdx,alt)} size="small" root={chords[showAltIdx].root}/>
-                            <button onClick={()=>selectAlt(showAltIdx,alt)} className="mt-1 px-2 py-0.5 rounded text-xs bg-gray-700 text-gray-300 hover:bg-emerald-700 hover:text-white transition-all">Use this</button>
-                          </div>
-                        ))}
+            {pickIdx!==null&&pickIdx<chords.length&&(()=>{
+              const ch=chords[pickIdx];
+              const cands=candidatesFor(ch);
+              if (!cands.length) return null;
+              const cur=path[pickIdx],curKey=pinKeyOf(cur),effPin=pins[pickIdx];
+              const active=STRING_SETS.filter(s=>selectedSets.includes(s.key));
+              return (
+                <div className="mt-4 p-3 bg-gray-800 rounded-lg border border-emerald-700/50">
+                  <div className="flex items-center justify-between gap-4 mb-2">
+                    <div className="text-xs text-emerald-400">Voicings for <span className="font-bold">{ch.name}</span> — click one to pin this bar; later bars re-lead from it</div>
+                    <button onClick={()=>unpinBar(pickIdx)} title="Let the voice-leading engine choose this bar" className={`px-2.5 py-0.5 rounded text-xs font-medium transition-all whitespace-nowrap ${effPin==null?'bg-emerald-600 text-white':'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>Auto</button>
+                  </div>
+                  {active.map(s=>{
+                    const group=cands.filter(v=>v.set.key===s.key);
+                    if (!group.length) return null;
+                    return (
+                      <div key={s.key} className="mb-3">
+                        <div className="text-xs font-semibold mb-2" style={{color:s.color}}>{s.label} <span className="text-gray-500 font-normal">{s.names}</span></div>
+                        <div className="flex flex-wrap gap-3">
+                          {group.map(v=>{
+                            const k=pinKeyOf(v),pinned=effPin===k,current=k===curKey;
+                            return (
+                              <div key={k} onClick={()=>pinBar(pickIdx,v)} className={`cursor-pointer rounded-lg border p-1.5 pb-0.5 flex flex-col items-center transition-all ${pinned?'border-amber-500 bg-amber-500/10':current?'border-emerald-600 bg-emerald-500/10':'border-gray-700 bg-gray-900 hover:border-gray-500'}`}>
+                                <div className={`text-[10px] font-medium ${pinned?'text-amber-400':current?'text-emerald-400':'text-gray-400'}`}>{fretRangeLabel(v)}{current&&!pinned?' · playing':''}</div>
+                                <FretDiag voicing={v} strs={v.set.strs} name={null} size="small" accent={v.set.color} root={ch.root}/>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              );
+            })()}
 
             {overlayData&&<OverlayDiagram data={overlayData}/>}
           </div>
 
           {prog.length===1&&(
-            <div className="text-xs text-gray-500 mt-3"><strong className="text-gray-400">Tip:</strong> Update your starting voicing (alt voicing) before adding your second chord for the smoothest transitions.</div>
+            <div className="text-xs text-gray-500 mt-3"><strong className="text-gray-400">Tip:</strong> Use <strong>Position</strong> to slide the whole progression up or down the neck, or click a chord's <strong>Voicings</strong> to pin a specific shape — later chords re-lead from it.</div>
           )}
 
           <div className="mt-4 overflow-x-auto">
@@ -484,15 +550,15 @@ export default function ProgressionPage() {
               </tr></thead>
               <tbody>
                 {chords.map((ch,i)=>{
-                  const v=path[i],sk=pathSets[i];
+                  const v=path[i];
                   if (!v) return <tr key={i} className="border-b border-gray-800/50"><td className="py-1.5 pr-3 text-amber-400 font-medium">{ch.name}</td><td colSpan={5} className="py-1.5 text-gray-600 italic">No voicing available</td></tr>;
                   return (
                     <tr key={i} className="border-b border-gray-800/50">
                       <td className="py-1.5 pr-3 text-amber-400 font-medium">{ch.name}</td>
-                      <td className="py-1.5 pr-3 text-emerald-400">{setShort(sk)}</td>
+                      <td className="py-1.5 pr-3" style={{color:v.set.color}}>{v.set.label}</td>
                       <td className="py-1.5 pr-3">{v.notes.map(n=>NOTES[n]).join(', ')}</td>
                       <td className="py-1.5 pr-3 font-mono">{v.frets.join('-')}</td>
-                      <td className="py-1.5 pr-3">{v.inv+rootStrLabel(v,SETS[sk].strs)}</td>
+                      <td className="py-1.5 pr-3">{v.inv+rootStrLabel(v,v.set.strs)}</td>
                       <td className="py-1.5">{i===0?'—':distances[i-1]!==null?shiftLabel(distances[i-1]):'—'}</td>
                     </tr>
                   );
@@ -504,7 +570,7 @@ export default function ProgressionPage() {
       )}
 
       <div className="mt-6 text-xs text-gray-600 border-t border-gray-800 pt-4">
-        <p><strong className="text-gray-500">How to use:</strong> Set chord quality, add chords. Click <strong>Alt voicing</strong> on any chord for alternatives. Click <strong>Overlay</strong> to see the CAGED chord shape and pentatonic scale around any voicing. 7th chord voicings use shell voicings (root, 3rd/b3rd, 7th) — the 5th is omitted to fit 3 strings.</p>
+        <p><strong className="text-gray-500">How to use:</strong> Set chord quality, add chords, and the smoothest path is voice-led for you across the active <strong>string sets</strong> (toggle them, and use <strong>Position</strong> to move the whole path up or down the neck). With more than one set on, each chord picks the voicing that moves your hand the least — crossing between 3-2-1, 4-3-2, 5-4-3, and 6-5-4 the way real position playing does (each chord's card is colored by its set). Click any chord's <strong>Voicings</strong> to pin a specific shape (later chords re-lead from it; <strong>Auto</strong> unpins). Click <strong>Overlay</strong> to see the CAGED chord shape and pentatonic scale around any voicing. 7th chord voicings use shell voicings (root, 3rd/b3rd, 7th) — the 5th is omitted to fit 3 strings.</p>
       </div>
     </div>
     </div>

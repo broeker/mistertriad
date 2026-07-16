@@ -4,16 +4,10 @@ export const NOTES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 export const OPEN = { 1:4, 2:11, 3:7, 4:2, 5:9, 6:4 };
 export const SNAME = { 1:'E', 2:'B', 3:'G', 4:'D', 5:'A', 6:'E' };
 
-// String sets used by the progression page.
-export const SETS = {
-  s1: { strs:[3,2,1], label:'Strings 3-2-1 (G, B, E)' },
-  s2: { strs:[4,3,2], label:'Strings 4-3-2 (D, G, B)' },
-};
-
-// All adjacent 3-string sets, used by the triad finder.
-// color: per-set hue for the UI's color language (chips, card labels, picker,
-// and the diagram's position badge). Warm→cool by pitch; kept clear of the
-// amber(root)/blue(non-root) used inside the diagrams.
+// All adjacent 3-string sets, used across the app (progression page, triad
+// finder, and player). color: per-set hue for the UI's color language (chips,
+// card labels, picker, and the diagram's position badge). Warm→cool by pitch;
+// kept clear of the amber(root)/blue(non-root) used inside the diagrams.
 export const STRING_SETS = [
   { key:'321', strs:[3,2,1], label:'3-2-1', names:'G B E', color:'#38bdf8' },
   { key:'432', strs:[4,3,2], label:'4-3-2', names:'D G B', color:'#c084fc' },
