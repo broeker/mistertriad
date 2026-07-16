@@ -1,14 +1,20 @@
-import { NOTES, SNAME, IV_LABEL } from './music.js';
+import { NOTES, SNAME } from './music.js';
+import { fretWindow, dotLabel } from './fretboard.js';
+
+// Interval-free note spelling with the root(s) bolded: "C-E-G". Shared by the
+// chord diagram and the print voicings.
+export function NoteList({notes, rootIdx, strongClass='text-white'}) {
+  return notes
+    .map((n,j)=>rootIdx.includes(j)?<strong key={j} className={strongClass}>{NOTES[n]}</strong>:NOTES[n])
+    .reduce((acc,el,j)=>j===0?[el]:[...acc,'-',el],[]);
+}
 
 /* ---- Full-chord Reference Diagram (6 strings, muted strings marked x) ---- */
 export function GripDiag({grip}) {
   if (!grip) return null;
   const cols=[6,5,4,3,2,1].map(s=>({s,d:grip.frets[s]||null}));
   const played=cols.filter(c=>c.d).map(c=>c.d.fret);
-  const maxF=Math.max(...played),nz=played.filter(f=>f>0);
-  const minNZ=nz.length?Math.min(...nz):0;
-  const startF=maxF<=4?0:Math.max(0,minNZ-1),endF=Math.max(startF+4,maxF+1);
-  const nFrets=endF-startF,hasNut=startF===0;
+  const {minNZ,startF,endF,nFrets,hasNut}=fretWindow(played);
   const w=168,h=158,m={t:40,b:14,l:30,r:14};
   const pw=w-m.l-m.r,ph=h-m.t-m.b,ss=pw/5,fs=ph/nFrets;
   return (
@@ -28,7 +34,7 @@ export function GripDiag({grip}) {
         const {fret,interval}=c.d;
         const isRoot=interval===0;
         const col=isRoot?"#f59e0b":"#3b82f6",strk=isRoot?"#fbbf24":"#60a5fa",tc=isRoot?"#000":"#fff";
-        const label=IV_LABEL[interval]||interval;
+        const label=dotLabel(interval,null);
         if (fret===0){const cy=hasNut?m.t-9:m.t-10;return <g key={c.s}><circle cx={x} cy={cy} r={6.5} fill={col} stroke={strk} strokeWidth={1.2}/><text x={x} y={cy+0.5} fontSize="6.5" fill={tc} textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{label}</text></g>;}
         const y=m.t+(fret-startF-0.5)*fs;
         return <g key={c.s}><circle cx={x} cy={y} r={8} fill={col} stroke={strk} strokeWidth={1.2}/><text x={x} y={y+0.5} fontSize="7" fill={tc} textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{label}</text></g>;
@@ -46,9 +52,7 @@ export default function FretDiag({voicing,strs,name,highlight,onClick,size="norm
     </div>
   );
   const {frets,notes,rootIdx}=voicing;
-  const maxF=Math.max(...frets),minNZ=Math.min(...frets.filter(f=>f>0),maxF);
-  let startF=maxF<=4?0:Math.max(0,minNZ-1),endF=Math.max(startF+4,maxF+1);
-  const nFrets=endF-startF,hasNut=startF===0;
+  const {minNZ,startF,endF,nFrets,hasNut}=fretWindow(frets);
   const sm=size==="small";
   const w=sm?102:128,h=sm?135:162;
   const m=sm?{t:38,b:14,l:36,r:16}:{t:44,b:18,l:42,r:20};
@@ -74,7 +78,7 @@ export default function FretDiag({voicing,strs,name,highlight,onClick,size="norm
           {frets.map((f,i)=>{
             const isRoot=rootIdx.includes(i);
             const iv=root!==undefined?((notes[i]-root+12)%12):null;
-            const label=iv!==null?(IV_LABEL[iv]||iv):NOTES[notes[i]];
+            const label=dotLabel(iv,notes[i]);
             const col=isRoot?"#f59e0b":"#3b82f6",strk=isRoot?"#fbbf24":"#60a5fa",tc=isRoot?"#000":"#fff";
             if (f===0){const cx=m.l+i*ss,cy=hasNut?m.t-5:m.t-8;return <g key={i}><circle cx={cx} cy={cy} r={dotR*0.75} fill={col} stroke={strk} strokeWidth={1.5}/><text x={cx} y={cy+0.5} fontSize={fSize} fill={tc} textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{label}</text></g>;}
             const x=m.l+i*ss,y=m.t+(f-startF-0.5)*fs;
@@ -82,7 +86,7 @@ export default function FretDiag({voicing,strs,name,highlight,onClick,size="norm
           })}
         </svg>
       </div>
-      <div className="text-xs text-gray-300 mt-2.5">({notes.map((n,j)=>{const nn=NOTES[n];return rootIdx.includes(j)?<strong key={j} className="text-white">{nn}</strong>:nn;}).reduce((acc,el,j)=>j===0?[el]:[...acc,'-',el],[])}) <span className="text-gray-400">Frets:</span> <span className="font-semibold tabular-nums">{frets.join('-')}</span></div>
+      <div className="text-xs text-gray-300 mt-2.5">(<NoteList notes={notes} rootIdx={rootIdx}/>) <span className="text-gray-400">Frets:</span> <span className="font-semibold tabular-nums">{frets.join('-')}</span></div>
     </div>
   );
 }

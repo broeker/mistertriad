@@ -1,485 +1,28 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
-  NOTES, SCALE, DEGS, QS, QKEYS, STRING_SETS, isMinorFamily,
+  NOTES, DEGS, QS, QKEYS, STRING_SETS,
   getVoicings, closestVoicing, hasOpenString, firstPositionGrip,
-  matchCAGEDZone, voicingKey,
+  matchCAGEDZone,
 } from './music.js';
 import FretDiag, { GripDiag } from './FretDiag.jsx';
-import { ensureCtx, ctxTime, preload, preloadDrums, setMix, scheduleStrum, scheduleBass, scheduleDrum, scheduleLead, schedulePiano, scheduleBackup, stopAll, cancelPending, voicingMidis, STRING_MIDI, AUDIO_DEFAULTS, setAudioSettings, setGuitarSet as applyGuitarSet, setBassSet as applyBassSet, setPianoSet as applyPianoSet, setBackupSet as applyBackupSet } from './audio.js';
+import { ensureCtx, ctxTime, preload, preloadDrums, setMix, scheduleStrum, scheduleBass, scheduleDrum, scheduleLead, schedulePiano, scheduleBackup, stopAll, cancelPending, AUDIO_DEFAULTS, setAudioSettings, setGuitarSet as applyGuitarSet, setBassSet as applyBassSet, setPianoSet as applyPianoSet, setBackupSet as applyBackupSet } from './audio.js';
+import {
+  PROGRESSIONS, toBars, barsKey, FEATURED, progSummary,
+  METERS, METER_KEYS, STRUMS, GFILL_STRUMS, DRUM_PATTERNS, BASS_METERS,
+  GENRE_GROUPS, GENRES, DEFAULT_SETS, SECTION_IDS, SECTION_LABELS, SECTION_IDEAS,
+  chordOf, DEFAULT_GENRE, DEFAULT_PROG, DEFAULT_SET,
+} from './styles.js';
+import { buildSchedule as buildScheduleFn, centerOf, posCost, pinKeyOf } from './arranger.js';
+import { usePersistentState } from './hooks.js';
 
-// Iconic progressions per genre ([degree, quality]; quality defaults to maj).
-// Some appear under several genres — that's how music works.
-// A progression may carry a `set` object pinning any of the band knobs
-// (tempo, feel, strum, drums, bass, lead); knobs it omits are left alone.
-const PROGRESSIONS = {
-  blues: [
-    { name:'12-Bar Blues', bars:[[0],[0],[0],[0],[3],[3],[0],[0],[4,'7'],[3],[0],[4,'7']] },
-    { name:'12-Bar Shuffle (7ths)', bars:[[0,'7'],[0,'7'],[0,'7'],[0,'7'],[3,'7'],[3,'7'],[0,'7'],[0,'7'],[4,'7'],[3,'7'],[0,'7'],[4,'7']] },
-    { name:'Quick-Change 12-Bar', bars:[[0,'7'],[3,'7'],[0,'7'],[0,'7'],[3,'7'],[3,'7'],[0,'7'],[0,'7'],[4,'7'],[3,'7'],[0,'7'],[4,'7']] },
-    { name:'8-Bar Blues (Highway)', bars:[[0,'7'],[4,'7'],[3,'7'],[3,'7'],[0,'7'],[4,'7'],[0,'7'],[4,'7']] },
-    { name:'Minor Blues', bars:[[0,'min7'],[0,'min7'],[0,'min7'],[0,'min7'],[3,'min7'],[3,'min7'],[0,'min7'],[0,'min7'],[4,'7'],[3,'min7'],[0,'min7'],[4,'7']] },
-  ],
-  oldtime: [
-    { name:'Classic (I–IV–V–I)', bars:[[0],[3],[4],[0],[0],[3],[4],[0]] },
-    { name:'Classic + Turnaround (I–VI7–II7–V7)', bars:[[0],[3],[4],[0],[0],[5,'7'],[1,'7'],[4,'7']] },
-    { name:'Hank (I–IV–V–vi)', bars:[[0],[3],[4],[5,'min'],[0],[3],[4],[5,'min']] },
-    { name:'Hank + Turnaround (I–VI7–II7–V7)', bars:[[0],[3],[4],[5,'min'],[0],[5,'7'],[1,'7'],[4,'7']] },
-    { name:'Bob Wills (I–VI7–ii–V7)', bars:[[0],[5,'7'],[1,'min'],[4,'7'],[0],[5,'7'],[1,'min'],[4,'7']] },
-    { name:'Cabbage (I–IV–I–V)', bars:[[0],[3],[0],[4],[0],[3],[4],[0]],
-      set:{ tempo:112, strum:'boomchick', drums:'train', bass:'root5' } },
-    { name:'I–iii–IV–V–I–iii–I–V', bars:[[0],[2,'min'],[3],[4],[0],[2,'min'],[0],[4]] },
-    { name:'Circle (I–IV / I–V)', bars:[[0],[0],[3],[0],[0],[0],[4],[0]] },
-    { name:'Two-Chord (I–V)', bars:[[0],[0],[4],[4],[0],[0],[4],[0]] },
-  ],
-  bluegrass: [
-    { name:'I–IV–I–V', bars:[[0],[3],[0],[4],[0],[3],[4],[0]] },
-    { name:'Salty Dog (I–VI7–II7–V7)', bars:[[0],[5,'7'],[1,'7'],[4,'7'],[0],[5,'7'],[1,'7'],[4,'7']] },
-    { name:'Two-Chord Breakdown (I–V)', bars:[[0],[0],[4],[4],[0],[0],[4],[0]] },
-  ],
-  altcountry: [
-    { name:'I–V–vi–IV', bars:[[0],[4],[5,'min'],[3],[0],[4],[5,'min'],[3]] },
-    { name:'vi–IV–I–V', bars:[[5,'min'],[3],[0],[4],[5,'min'],[3],[0],[4]] },
-    { name:'50s (I–vi–IV–V)', bars:[[0],[5,'min'],[3],[4],[0],[5,'min'],[3],[4]] },
-    { name:'Jangle (I–IV)', bars:[[0],[0],[3],[3],[0],[0],[3],[3]] },
-  ],
-  lofi: [
-    { name:'ii7–V7–Imaj7', bars:[[1,'min7'],[4,'7'],[0,'maj7'],[0,'maj7'],[1,'min7'],[4,'7'],[0,'maj7'],[0,'maj7']] },
-    { name:'Imaj7–vi7–ii7–V7', bars:[[0,'maj7'],[5,'min7'],[1,'min7'],[4,'7'],[0,'maj7'],[5,'min7'],[1,'min7'],[4,'7']] },
-    { name:'iii7–vi7–ii7–V7', bars:[[2,'min7'],[5,'min7'],[1,'min7'],[4,'7'],[2,'min7'],[5,'min7'],[1,'min7'],[4,'7']] },
-  ],
-  folk: [
-    { name:'Paradise (I–IV–I–V)', bars:[[0],[0],[3],[0],[0],[0],[4],[0]] },
-    { name:'I–IV–V', bars:[[0],[3],[4],[0],[0],[3],[4],[0]] },
-    { name:'Two-Chord (I–V)', bars:[[0],[0],[4],[4],[0],[0],[4],[0]] },
-  ],
-  pop: [
-    { name:'Axis (I–V–vi–IV)', bars:[[0],[4],[5,'min'],[3],[0],[4],[5,'min'],[3]] },
-    { name:'vi–IV–I–V', bars:[[5,'min'],[3],[0],[4],[5,'min'],[3],[0],[4]] },
-    { name:'50s (I–vi–IV–V)', bars:[[0],[5,'min'],[3],[4],[0],[5,'min'],[3],[4]] },
-    { name:'I–IV–vi–V', bars:[[0],[3],[5,'min'],[4],[0],[3],[5,'min'],[4]] },
-  ],
-  indiepop: [
-    { name:'Jangle (I–IV)', bars:[[0],[0],[3],[3],[0],[0],[3],[3]] },
-    { name:'I–iii–vi–IV', bars:[[0],[2,'min'],[5,'min'],[3],[0],[2,'min'],[5,'min'],[3]] },
-    { name:'IV–I–V–vi', bars:[[3],[0],[4],[5,'min'],[3],[0],[4],[5,'min']] },
-    { name:'Borrowed iv (I–IV–iv–I)', bars:[[0],[0],[3],[3,'min'],[0],[0],[3,'min'],[0]] },
-  ],
-  bossa: [
-    { name:'ii7–V7–Imaj7', bars:[[1,'min7'],[4,'7'],[0,'maj7'],[0,'maj7'],[1,'min7'],[4,'7'],[0,'maj7'],[0,'maj7']] },
-    { name:'So Danço (Imaj7–II7–ii7–V7)', bars:[[0,'maj7'],[0,'maj7'],[1,'7'],[1,'7'],[1,'min7'],[1,'min7'],[4,'7'],[4,'7']] },
-    { name:'Minor Bossa (vi7–ii7–V7–Imaj7)', bars:[[5,'min7'],[1,'min7'],[4,'7'],[0,'maj7'],[5,'min7'],[1,'min7'],[4,'7'],[0,'maj7']] },
-  ],
-  jazz: [
-    { name:'ii–V–I', bars:[[1,'min7'],[4,'7'],[0,'maj7'],[0,'maj7']] },
-    { name:'Rhythm (I–vi–ii–V)', bars:[[0,'maj7'],[5,'min7'],[1,'min7'],[4,'7'],[0,'maj7'],[5,'min7'],[1,'min7'],[4,'7']] },
-    { name:'iii–vi–ii–V', bars:[[2,'min7'],[5,'min7'],[1,'min7'],[4,'7'],[2,'min7'],[5,'min7'],[1,'min7'],[4,'7']] },
-    { name:'Jazz Blues', bars:[[0,'7'],[3,'7'],[0,'7'],[0,'7'],[3,'7'],[3,'7'],[0,'7'],[0,'7'],[1,'min7'],[4,'7'],[0,'7'],[4,'7']] },
-  ],
-  funk: [
-    { name:'One-Chord Vamp (I7)', bars:[[0,'7'],[0,'7'],[0,'7'],[0,'7']] },
-    { name:'I7–IV7 Vamp', bars:[[0,'7'],[0,'7'],[3,'7'],[3,'7']] },
-    { name:'vi7–ii7 Vamp', bars:[[5,'min7'],[5,'min7'],[1,'min7'],[1,'min7']] },
-  ],
-  honkytonk: [
-    { name:'12-Bar Country', bars:[[0],[0],[0],[0],[3],[3],[0],[0],[4],[4],[0],[0]] },
-    { name:'I–IV–I–V', bars:[[0],[3],[0],[4],[0],[3],[4],[0]] },
-    { name:'I–I7–IV–V7', bars:[[0],[0,'7'],[3],[4,'7'],[0],[0,'7'],[3],[4,'7']] },
-  ],
-  piedmont: [
-    { name:'8-Bar Blues (Highway)', bars:[[0,'7'],[4,'7'],[3,'7'],[3,'7'],[0,'7'],[4,'7'],[0,'7'],[4,'7']] },
-    { name:'Freight Train (I–V7–III7–IV)', bars:[[0],[0],[4,'7'],[4,'7'],[0],[0],[2,'7'],[2,'7'],[3],[3],[0],[4,'7']] },
-    { name:'Quick-Change 12-Bar', bars:[[0,'7'],[3,'7'],[0,'7'],[0,'7'],[3,'7'],[3,'7'],[0,'7'],[0,'7'],[4,'7'],[3,'7'],[0,'7'],[4,'7']] },
-  ],
-  slowblues: [
-    { name:'12-Bar Slow Blues (7ths)', bars:[[0,'7'],[0,'7'],[0,'7'],[0,'7'],[3,'7'],[3,'7'],[0,'7'],[0,'7'],[4,'7'],[3,'7'],[0,'7'],[4,'7']] },
-    { name:'Quick-Change 12-Bar', bars:[[0,'7'],[3,'7'],[0,'7'],[0,'7'],[3,'7'],[3,'7'],[0,'7'],[0,'7'],[4,'7'],[3,'7'],[0,'7'],[4,'7']] },
-    { name:'Minor Blues', bars:[[0,'min7'],[0,'min7'],[0,'min7'],[0,'min7'],[3,'min7'],[3,'min7'],[0,'min7'],[0,'min7'],[4,'7'],[3,'min7'],[0,'min7'],[4,'7']] },
-  ],
-  folkwaltz: [
-    { name:'Waltz (I–IV–I–V)', bars:[[0],[3],[0],[4],[0],[3],[4],[0]] },
-    { name:'Waltz (I–vi–IV–V)', bars:[[0],[5,'min'],[3],[4],[0],[5,'min'],[3],[4]] },
-    { name:'Two-Chord Waltz (I–V)', bars:[[0],[0],[4],[4],[0],[0],[4],[0]] },
-  ],
-  countrywaltz: [
-    { name:'Waltz (I–IV–I–V)', bars:[[0],[3],[0],[4],[0],[3],[4],[0]] },
-    { name:'Waltz (I–V–V–I)', bars:[[0],[0],[4],[4],[4],[4],[0],[0]] },
-    { name:'Waltz (I–I7–IV–I)', bars:[[0],[0,'7'],[3],[0],[0],[0,'7'],[4],[0]] },
-  ],
-  rocknroll: [
-    { name:'50s (I–vi–IV–V)', bars:[[0],[5,'min'],[3],[4],[0],[5,'min'],[3],[4]] },
-    { name:'12-Bar Rock & Roll', bars:[[0],[0],[0],[0],[3],[3],[0],[0],[4],[3],[0],[0]] },
-    { name:'I–IV–V', bars:[[0],[3],[4],[0],[0],[3],[4],[0]] },
-  ],
-  rockabilly: [
-    { name:'12-Bar Shuffle (7ths)', bars:[[0,'7'],[0,'7'],[0,'7'],[0,'7'],[3,'7'],[3,'7'],[0,'7'],[0,'7'],[4,'7'],[3,'7'],[0,'7'],[4,'7']] },
-    { name:'Quick-Change 12-Bar', bars:[[0,'7'],[3,'7'],[0,'7'],[0,'7'],[3,'7'],[3,'7'],[0,'7'],[0,'7'],[4,'7'],[3,'7'],[0,'7'],[4,'7']] },
-    { name:'8-Bar Bop (I–V)', bars:[[0],[0],[4],[4],[0],[0],[4],[0]] },
-  ],
-  jazzwaltz: [
-    { name:'ii–V–I', bars:[[1,'min7'],[4,'7'],[0,'maj7'],[0,'maj7']] },
-    { name:'Rhythm (I–vi–ii–V)', bars:[[0,'maj7'],[5,'min7'],[1,'min7'],[4,'7'],[0,'maj7'],[5,'min7'],[1,'min7'],[4,'7']] },
-    { name:'Minor Waltz (vi7–ii7–V7–Imaj7)', bars:[[5,'min7'],[1,'min7'],[4,'7'],[0,'maj7'],[5,'min7'],[1,'min7'],[4,'7'],[0,'maj7']] },
-  ],
-};
-const toBars = barDefs => barDefs.map(([deg,q='maj'])=>({deg,q}));
-const barsKey = bs => bs.map(b=>`${b.deg}:${b.q}`).join(',');
-
-// How many progression buttons show inline per genre; the rest go behind "More".
-const FEATURED = 4;
-
-const numeralOf = b => {
-  const d = DEGS.find(x=>x.i===b.deg); if (!d) return '?';
-  const base = d.n.replace('°','');
-  switch (b.q) {
-    case 'maj':  return base.toUpperCase();
-    case 'min':  return base.toLowerCase();
-    case 'dim':  return base.toLowerCase()+'°';
-    case '7':    return base.toUpperCase()+'7';
-    case 'maj7': return base.toUpperCase()+'maj7';
-    case 'min7': return base.toLowerCase()+'7';
-    default:     return base.toUpperCase()+QS[b.q].s;
-  }
-};
-// Compact numeral summary with adjacent repeats collapsed: "I–IV–I–V7–IV–I–V7".
-const progSummary = barDefs => {
-  const ns = toBars(barDefs).map(numeralOf);
-  return ns.filter((n,i)=>i===0||n!==ns[i-1]).join('–');
-};
-
-// Meters. Pattern `b` values are quarter-note beats in simple meters; in 6/8
-// they're dotted-quarter pulse units (tempo = pulse bpm) with eighths on
-// thirds. `grid` is the bar's subdivision — lead lines and fill placement
-// derive from it. swing:false meters are already compound, so the Shuffle
-// feel is forced straight there.
-const METERS = {
-  '4/4': { label:'4/4', beats:4, grid:[0,0.5,1,1.5,2,2.5,3,3.5], swing:true  },
-  '3/4': { label:'3/4', beats:3, grid:[0,0.5,1,1.5,2,2.5],       swing:true  },
-  '6/8': { label:'6/8', beats:2, grid:[0,1/3,2/3,1,4/3,5/3],     swing:false },
-};
-const METER_KEYS = Object.keys(METERS);
-
-// Strum patterns, keyed by meter (span: full/top/bass). A strum supports only
-// the meters it defines; the UI hides it elsewhere and falls back to Folk.
-const STRUMS = {
-  folk: { label:'Folk', p:{
-    '4/4':[ // D-DU-UDU
-      { b:0, dir:'down', g:1.0 }, { b:1, dir:'down', g:0.75 }, { b:1.5, dir:'up', g:0.4 },
-      { b:2.5, dir:'up', g:0.4 }, { b:3, dir:'down', g:0.75 }, { b:3.5, dir:'up', g:0.4 },
-    ],
-    '3/4':[ // waltz D-DU-DU
-      { b:0, dir:'down', g:1.0 }, { b:1, dir:'down', g:0.7 }, { b:1.5, dir:'up', g:0.4 },
-      { b:2, dir:'down', g:0.7 }, { b:2.5, dir:'up', g:0.4 },
-    ],
-    '6/8':[ // flowing Dud-Dud
-      { b:0, dir:'down', g:1.0 }, { b:1/3, dir:'up', g:0.35 }, { b:2/3, dir:'down', g:0.5 },
-      { b:1, dir:'down', g:0.8 }, { b:4/3, dir:'up', g:0.35 }, { b:5/3, dir:'down', g:0.5 },
-    ],
-  }},
-  boomchick: { label:'Boom-chick', p:{
-    '4/4':[
-      { b:0, dir:'down', g:1.0, span:'bass' }, { b:1, dir:'down', g:0.8, span:'top' },
-      { b:2, dir:'down', g:0.95, span:'bass' }, { b:3, dir:'down', g:0.8, span:'top' },
-    ],
-    '3/4':[ // bass-chick-chick
-      { b:0, dir:'down', g:1.0, span:'bass' }, { b:1, dir:'down', g:0.8, span:'top' },
-      { b:2, dir:'down', g:0.75, span:'top' },
-    ],
-  }},
-  bluegrass: { label:'Bluegrass', p:{
-    '4/4':[
-      { b:0, dir:'down', g:1.0, span:'bass' }, { b:1, dir:'down', g:0.8, span:'top' }, { b:1.5, dir:'up', g:0.35 },
-      { b:2, dir:'down', g:0.95, span:'bass' }, { b:3, dir:'down', g:0.8, span:'top' }, { b:3.5, dir:'up', g:0.35 },
-    ],
-  }},
-  lofi: { label:'Lo-fi', p:{
-    '4/4':[
-      { b:0, dir:'down', g:0.85 }, { b:1.5, dir:'up', g:0.35 },
-      { b:2, dir:'down', g:0.7 }, { b:3.5, dir:'up', g:0.3 },
-    ],
-    '3/4':[ // sparse waltz comp (doubles as jazz-waltz guitar)
-      { b:0, dir:'down', g:0.85 }, { b:1.5, dir:'up', g:0.4 }, { b:2, dir:'down', g:0.55 },
-    ],
-    '6/8':[
-      { b:0, dir:'down', g:0.85 }, { b:2/3, dir:'up', g:0.35 },
-      { b:1, dir:'down', g:0.6 }, { b:5/3, dir:'up', g:0.3 },
-    ],
-  }},
-  pop: { label:'Pop', p:{
-    '4/4':[
-      { b:0, dir:'down', g:1.0 }, { b:0.5, dir:'up', g:0.35 }, { b:1, dir:'down', g:0.6 }, { b:1.5, dir:'up', g:0.4 },
-      { b:2, dir:'down', g:0.9 }, { b:2.5, dir:'up', g:0.35 }, { b:3, dir:'down', g:0.6 }, { b:3.5, dir:'up', g:0.45 },
-    ],
-  }},
-  travis: { label:'Travis', p:{
-    '4/4':[ // thumb on every beat, soft finger picks on the ands
-      { b:0, dir:'down', g:1.0, span:'bass' }, { b:0.5, dir:'up', g:0.4 }, { b:1, dir:'down', g:0.8, span:'bass' }, { b:1.5, dir:'up', g:0.45 },
-      { b:2, dir:'down', g:0.95, span:'bass' }, { b:2.5, dir:'up', g:0.4 }, { b:3, dir:'down', g:0.8, span:'bass' }, { b:3.5, dir:'up', g:0.45 },
-    ],
-    '3/4':[
-      { b:0, dir:'down', g:1.0, span:'bass' }, { b:0.5, dir:'up', g:0.4 }, { b:1, dir:'down', g:0.8, span:'bass' },
-      { b:1.5, dir:'up', g:0.45 }, { b:2, dir:'down', g:0.85, span:'bass' }, { b:2.5, dir:'up', g:0.4 },
-    ],
-    '6/8':[ // thumb on both pulses, picks between
-      { b:0, dir:'down', g:1.0, span:'bass' }, { b:1/3, dir:'up', g:0.4 }, { b:2/3, dir:'up', g:0.45 },
-      { b:1, dir:'down', g:0.85, span:'bass' }, { b:4/3, dir:'up', g:0.4 }, { b:5/3, dir:'up', g:0.45 },
-    ],
-  }},
-  bossa: { label:'Bossa', p:{
-    '4/4':[
-      { b:0, dir:'down', g:0.85 }, { b:1, dir:'down', g:0.5 }, { b:1.5, dir:'up', g:0.55 },
-      { b:2.5, dir:'up', g:0.55 }, { b:3, dir:'down', g:0.6 },
-    ],
-  }},
-  funk: { label:'Funk', p:{
-    '4/4':[ // straight-16th scratch accents; falls apart charmingly under shuffle
-      { b:0, dir:'down', g:1.0 }, { b:0.75, dir:'up', g:0.45 }, { b:1, dir:'down', g:0.4 }, { b:1.5, dir:'up', g:0.5 },
-      { b:2, dir:'down', g:0.9 }, { b:2.75, dir:'up', g:0.45 }, { b:3, dir:'down', g:0.4 }, { b:3.5, dir:'up', g:0.55 },
-    ],
-  }},
-};
-
-// Strums where a country bass-run walkup into the next chord makes musical sense.
-const GFILL_STRUMS=['boomchick','bluegrass','folk','travis'];
-
-// Drum patterns per mode and meter ({b,kind,g}; sw: swings with the feel).
-// 4/4 entries are the original inline patterns, transcribed exactly.
-const DRUM_PATTERNS = {
-  stomp: {
-    '4/4':[ {b:0,kind:'stomp',g:1}, {b:2,kind:'stomp',g:0.8} ],
-    '3/4':[ {b:0,kind:'stomp',g:1} ],
-    '6/8':[ {b:0,kind:'stomp',g:1}, {b:1,kind:'stomp',g:0.8} ],
-  },
-  kit: {
-    '4/4':[
-      {b:0,kind:'kick',g:1}, {b:2,kind:'kick',g:1}, {b:1,kind:'snare',g:1}, {b:3,kind:'snare',g:1},
-      {b:0,kind:'hat',g:1,sw:true},{b:0.5,kind:'hat',g:0.7,sw:true},{b:1,kind:'hat',g:1,sw:true},{b:1.5,kind:'hat',g:0.7,sw:true},
-      {b:2,kind:'hat',g:1,sw:true},{b:2.5,kind:'hat',g:0.7,sw:true},{b:3,kind:'hat',g:1,sw:true},{b:3.5,kind:'hat',g:0.7,sw:true},
-    ],
-    '3/4':[ // waltz: kick on 1, soft snares on 2 and 3
-      {b:0,kind:'kick',g:1}, {b:1,kind:'snare',g:0.7}, {b:2,kind:'snare',g:0.6},
-      {b:0,kind:'hat',g:1,sw:true},{b:0.5,kind:'hat',g:0.7,sw:true},{b:1,kind:'hat',g:1,sw:true},
-      {b:1.5,kind:'hat',g:0.7,sw:true},{b:2,kind:'hat',g:1,sw:true},{b:2.5,kind:'hat',g:0.7,sw:true},
-    ],
-    '6/8':[ // slow-blues 6/8: kick on 1, snare on the second pulse, hats on all six
-      {b:0,kind:'kick',g:1}, {b:1,kind:'snare',g:1},
-      {b:0,kind:'hat',g:0.85},{b:1/3,kind:'hat',g:0.55},{b:2/3,kind:'hat',g:0.55},
-      {b:1,kind:'hat',g:0.85},{b:4/3,kind:'hat',g:0.55},{b:5/3,kind:'hat',g:0.55},
-    ],
-  },
-  train: {
-    '4/4':[
-      {b:0,kind:'kick',g:0.6}, {b:2,kind:'kick',g:0.6},
-      {b:0,kind:'brush',g:0.55,sw:true},{b:0.5,kind:'brush',g:0.55,sw:true},{b:1,kind:'brush',g:1,sw:true},{b:1.5,kind:'brush',g:0.55,sw:true},
-      {b:2,kind:'brush',g:0.55,sw:true},{b:2.5,kind:'brush',g:0.55,sw:true},{b:3,kind:'brush',g:1,sw:true},{b:3.5,kind:'brush',g:0.55,sw:true},
-    ],
-    '3/4':[
-      {b:0,kind:'kick',g:0.6},
-      {b:0,kind:'brush',g:0.55,sw:true},{b:0.5,kind:'brush',g:0.55,sw:true},{b:1,kind:'brush',g:1,sw:true},
-      {b:1.5,kind:'brush',g:0.55,sw:true},{b:2,kind:'brush',g:1,sw:true},{b:2.5,kind:'brush',g:0.55,sw:true},
-    ],
-    '6/8':[
-      {b:0,kind:'kick',g:0.6},
-      {b:0,kind:'brush',g:0.85},{b:1/3,kind:'brush',g:0.5},{b:2/3,kind:'brush',g:0.5},
-      {b:1,kind:'brush',g:1},{b:4/3,kind:'brush',g:0.5},{b:5/3,kind:'brush',g:0.5},
-    ],
-  },
-  bossa: {
-    '4/4':[
-      {b:0,kind:'kick',g:0.75}, {b:2,kind:'kick',g:0.75},
-      {b:0,kind:'hat',g:0.55},{b:0.5,kind:'hat',g:0.4},{b:1,kind:'hat',g:0.55},{b:1.5,kind:'hat',g:0.4},
-      {b:2,kind:'hat',g:0.55},{b:2.5,kind:'hat',g:0.4},{b:3,kind:'hat',g:0.55},{b:3.5,kind:'hat',g:0.4},
-      {b:1,kind:'rim',g:0.9},{b:2.5,kind:'rim',g:0.9},
-    ],
-  },
-  swing: {
-    '4/4':[
-      {b:0,kind:'ride',g:0.8,sw:true},{b:1,kind:'ride',g:1,sw:true},{b:1.5,kind:'ride',g:0.6,sw:true},
-      {b:2,kind:'ride',g:0.8,sw:true},{b:3,kind:'ride',g:1,sw:true},{b:3.5,kind:'ride',g:0.6,sw:true},
-      {b:1,kind:'hat',g:0.5},{b:3,kind:'hat',g:0.5},
-      {b:0,kind:'kick',g:0.3},{b:2,kind:'kick',g:0.3},
-    ],
-    '3/4':[ // jazz waltz ride
-      {b:0,kind:'ride',g:0.9,sw:true},{b:1,kind:'ride',g:1,sw:true},{b:1.5,kind:'ride',g:0.6,sw:true},
-      {b:2,kind:'ride',g:0.8,sw:true},
-      {b:1,kind:'hat',g:0.5},
-      {b:0,kind:'kick',g:0.3},
-    ],
-  },
-  funk: {
-    '4/4':[
-      {b:0,kind:'kick',g:1},{b:1.75,kind:'kick',g:0.8},{b:2.5,kind:'kick',g:0.9},
-      {b:1,kind:'snare',g:1},{b:3,kind:'snare',g:1},
-      {b:0.75,kind:'snare',g:0.4},{b:2.25,kind:'snare',g:0.4},
-      {b:0,kind:'hat',g:0.85},{b:0.5,kind:'hat',g:0.55},{b:1,kind:'hat',g:0.85},{b:1.5,kind:'hat',g:0.55},
-      {b:2,kind:'hat',g:0.85},{b:2.5,kind:'hat',g:0.55},{b:3,kind:'hat',g:0.85},{b:3.5,kind:'hat',g:0.55},
-    ],
-  },
-};
-
-// Which meters each bass mode supports (boogie/bossa/funk lines are 4/4 idioms).
-const BASS_METERS = {
-  root:['4/4','3/4','6/8'], root5:['4/4','3/4','6/8'], walk:['4/4','3/4','6/8'],
-  boogie:['4/4'], bossa:['4/4'], funk:['4/4'],
-};
-
-// Backup channel (second rhythm instrument — banjo for now) patterns.
-// {b, n, g}: n indexes the bar's roll pool [root, third, fifth, octave];
-// chord:true plays pool notes 0-2 together as a short muted stab.
-const BACKUP_PATTERNS = {
-  roll: { // three-finger forward/forward-reverse rolls
-    '4/4':[ {b:0,n:0,g:0.9},{b:0.5,n:1,g:0.55},{b:1,n:2,g:0.65},{b:1.5,n:3,g:0.6},
-            {b:2,n:0,g:0.8},{b:2.5,n:2,g:0.55},{b:3,n:1,g:0.65},{b:3.5,n:3,g:0.6} ],
-    '3/4':[ {b:0,n:0,g:0.9},{b:0.5,n:1,g:0.55},{b:1,n:2,g:0.65},
-            {b:1.5,n:3,g:0.6},{b:2,n:1,g:0.6},{b:2.5,n:2,g:0.55} ],
-    '6/8':[ {b:0,n:0,g:0.9},{b:1/3,n:1,g:0.55},{b:2/3,n:2,g:0.6},
-            {b:1,n:3,g:0.75},{b:4/3,n:2,g:0.55},{b:5/3,n:1,g:0.6} ],
-  },
-  chop: { // muted backbeat stabs (the mandolin-chop feel)
-    '4/4':[ {b:1,chord:true,g:0.8},{b:3,chord:true,g:0.75} ],
-    '3/4':[ {b:1,chord:true,g:0.8},{b:2,chord:true,g:0.7} ],
-    '6/8':[ {b:1,chord:true,g:0.8} ],
-  },
-};
-const BACKUP_TOP = 71; // ganjo's highest sampled root — keep the octave inside it
-
-// A style is a bundle of the knobs: meter, tempo, feel, strum pattern, rhythm
-// section, sample sets. Styles group under genre tabs (Genre → Style picker).
-const GENRE_GROUPS = ['Country','Blues','Folk','Rock & Pop','Jazz & Latin','Groove'];
-const GENRES = [
-  // Country
-  { key:'oldtime',    group:'Country', label:'Old-Time',      tempo:100, feel:'straight', strum:'boomchick', drums:'train', bass:'root5',  lead:'off',   drumFills:false, keys:'off', mix:{guitar:1.1,drums:0.85} },
-  { key:'bluegrass',  group:'Country', label:'Bluegrass',     tempo:145, feel:'straight', strum:'bluegrass', drums:'off',   bass:'walk',   lead:'fills', drumFills:false, keys:'off', backup:'roll', mix:{guitar:1.1,bass:1.15} },
-  { key:'honkytonk',  group:'Country', label:'Honky-Tonk',    tempo:105, feel:'shuffle',  strum:'boomchick', drums:'kit',   bass:'root5',  bassFills:true, lead:'fills', drumFills:false, keys:'on',  guitarInst:'jazz', mix:{piano:1.15} },
-  { key:'altcountry', group:'Country', label:'Alt Country',   tempo:95,  feel:'straight', strum:'folk',      drums:'kit',   bass:'root5',  lead:'off',   drumFills:true,  keys:'on' },
-  { key:'countrywaltz',group:'Country',label:'Country Waltz', meter:'3/4', tempo:90, feel:'straight', strum:'boomchick', drums:'train', bass:'root5', bassFills:true, lead:'fills', drumFills:false, keys:'off', mix:{guitar:1.1,drums:0.8} },
-  // Blues
-  { key:'blues',      group:'Blues', label:'Blues',           tempo:84,  feel:'shuffle',  strum:'folk',      drums:'kit',   bass:'boogie', lead:'fills', drumFills:true,  keys:'off' },
-  { key:'piedmont',   group:'Blues', label:'Piedmont',        tempo:110, feel:'shuffle',  strum:'travis',    drums:'off',   bass:'root',   lead:'off',   drumFills:false, keys:'off', mix:{guitar:1.2,bass:0.8} },
-  { key:'slowblues',  group:'Blues', label:'Slow Blues',      meter:'6/8', tempo:60, feel:'straight', strum:'folk', drums:'kit', bass:'walk', lead:'fills', drumFills:true, keys:'on', mix:{drums:0.9,piano:0.95} },
-  // Folk
-  { key:'folk',       group:'Folk', label:'Folk',             tempo:96,  feel:'straight', strum:'travis',    drums:'off',   bass:'root5',  lead:'fills', drumFills:false, keys:'off', mix:{guitar:1.15} },
-  { key:'folkwaltz',  group:'Folk', label:'Folk Waltz',       meter:'3/4', tempo:100, feel:'straight', strum:'travis', drums:'off', bass:'root5', lead:'off', drumFills:false, keys:'off', mix:{guitar:1.15} },
-  // Rock & Pop
-  { key:'pop',        group:'Rock & Pop', label:'Pop',        tempo:116, feel:'straight', strum:'pop',       drums:'kit',   bass:'root5',  lead:'off',   drumFills:true,  keys:'on',  bassInst:'electric', mix:{drums:1.1,bass:1.15,guitar:0.9} },
-  { key:'indiepop',   group:'Rock & Pop', label:'Indie Pop',  tempo:128, feel:'straight', strum:'pop',       drums:'kit',   bass:'root',   lead:'off',   drumFills:false, keys:'off', bassInst:'electric' },
-  { key:'rocknroll',  group:'Rock & Pop', label:'Rock & Roll',tempo:150, feel:'straight', strum:'pop',       drums:'kit',   bass:'boogie', lead:'fills', drumFills:true,  keys:'on',  bassInst:'electric', guitarInst:'jazz', mix:{piano:1.2,drums:1.15,bass:1.15} },
-  { key:'rockabilly', group:'Rock & Pop', label:'Rockabilly', tempo:170, feel:'shuffle',  strum:'folk',      drums:'kit',   bass:'boogie', lead:'fills', drumFills:true,  keys:'off', guitarInst:'jazz', mix:{bass:1.25,drums:0.95} },
-  // Jazz & Latin
-  { key:'jazz',       group:'Jazz & Latin', label:'Jazz',     tempo:132, feel:'shuffle',  strum:'lofi',      drums:'swing', bass:'walk',   lead:'fills', drumFills:false, keys:'on',  guitarInst:'jazz', mix:{bass:1.2,drums:0.85} },
-  { key:'bossa',      group:'Jazz & Latin', label:'Bossa Nova',tempo:120, feel:'straight', strum:'bossa',    drums:'bossa', bass:'bossa',  lead:'off',   drumFills:false, keys:'on',  guitarInst:'nylon', mix:{guitar:1.1,drums:0.8} },
-  { key:'jazzwaltz',  group:'Jazz & Latin', label:'Jazz Waltz', meter:'3/4', tempo:140, feel:'shuffle', strum:'lofi', drums:'swing', bass:'walk', lead:'fills', drumFills:false, keys:'on', guitarInst:'jazz', mix:{bass:1.2,drums:0.85} },
-  // Groove
-  { key:'funk',       group:'Groove', label:'Funk',           tempo:102, feel:'straight', strum:'funk',      drums:'funk',  bass:'funk',   lead:'off',   drumFills:true,  keys:'off', bassInst:'electric', guitarInst:'muted', mix:{bass:1.25,drums:1.15} },
-  { key:'lofi',       group:'Groove', label:'Lo-Fi',          tempo:72,  feel:'shuffle',  strum:'lofi',      drums:'kit',   bass:'root',   lead:'solo',  drumFills:false, keys:'fills', mix:{lead:0.85,drums:0.9} },
-];
-
-// Drum fills: three swung-eighth hits into every 4th bar, moving around the
-// kit. [kind, gain] triples land on beats 2.5 / 3 / 3.5.
-const DRUM_FILLS = [
-  [['snare',0.5],['snare',0.7],['snare',0.95]],
-  [['snare',0.6],['hitom',0.75],['lotom',0.9]],
-  [['hitom',0.6],['snare',0.75],['snare',0.9]],
-  [['snare',0.7],['hitom',0.8],['lotom',0.95]],
-  [['snare',0.65],['lotom',0.8],['snare',0.95]],
-];
-
-// Pentatonic notes on this string set within the triad voicing's fret window —
-// i.e., the lick vocabulary of that CAGED position (what the Overlay shows).
-function leadPool(ch, voicing, strs) {
-  const ivs = isMinorFamily(ch.quality) ? [0,3,5,7,10] : [0,2,4,7,9];
-  const pcs = new Set(ivs.map(iv=>(ch.root+iv)%12));
-  const nz = voicing.frets.filter(f=>f>0);
-  const lo = Math.max(0,(nz.length?Math.min(...nz):0)-2);
-  const hi = Math.max(...voicing.frets)+3;
-  const pool = [];
-  for (const s of strs) for (let f=lo;f<=hi;f++) {
-    const m = STRING_MIDI[s]+f;
-    if (m<=78 && pcs.has(m%12)) pool.push(m); // 78 = top of the sample range
-  }
-  return [...new Set(pool)].sort((a,b)=>a-b);
-}
-
-/* ---- Auto string-set path engine ---- */
-// "Auto" searches voicings across these sets and voice-leads between them the
-// way a player crosses sets moving up the neck. 6-5-4 is left out — triads
-// that low read as mud under a band.
-// Default active string sets: the three movable sets (6-5-4 reads as mud under
-// a band, so it's off by default — but selectable). More than one set on = the
-// cross-set voice-leading engine (formerly "Auto").
-const DEFAULT_SETS=['321','432','543'];
-const centerOf=v=>{const nz=v.frets.filter(f=>f>0);return nz.length?(Math.min(...nz)+Math.max(...v.frets))/2:0;};
-const pitchesOf=v=>v.set.strs.map((s,i)=>STRING_MIDI[s]+v.frets[i]);
-// Position-playing cost: staying in the pass's fret window dominates (the hand
-// doesn't drift), with pitch continuity as a soft tiebreaker and only a nudge
-// against changing sets — crossing sets inside the window is the point.
-const posCost=(v,prev,win)=>{
-  let c=(win!=null?Math.abs(centerOf(v)-win)*3:0)+(hasOpenString(v.frets)?3:0);
-  const pa=[...pitchesOf(v)].sort((x,y)=>x-y),pb=[...pitchesOf(prev)].sort((x,y)=>x-y);
-  let d=0; for (let i=0;i<pa.length;i++) d+=Math.abs(pa[i]-pb[i]);
-  return c+d*0.4+(v.set.key!==prev.set.key?0.5:0);
-};
-const pinKeyOf=v=>v?`${v.set.key}:${voicingKey(v)}`:'';
-
-// Roll an articulation for a lead note: legato (hammer-on/pull-off) on close
-// offbeat steps, bends into strong beats, occasional double stop a third/fourth
-// below. Returns null for a plain picked note.
-function leadArt(pool, idx, prevMidi, b, fillEnd) {
-  const m = pool[idx];
-  const art = {};
-  const interval = prevMidi != null ? Math.abs(m - prevMidi) : 0;
-  if (interval > 0 && interval <= 3 && b % 1 !== 0 && Math.random() < 0.35) {
-    art.offset = 0.05;
-  } else if ((b % 1 === 0 || fillEnd) && Math.random() < (fillEnd ? 0.5 : 0.22)) {
-    art.bendFrom = -(Math.random() < 0.5 ? 1 : 2);
-    art.bendDur = 0.12 + Math.random() * 0.06;
-  }
-  if ((b % 1 === 0 || fillEnd) && idx >= 2 && Math.random() < (fillEnd ? 0.3 : 0.15)) {
-    const d = pool[idx - 2];
-    if (m - d >= 3 && m - d <= 7) art.double = d;
-  }
-  return Object.keys(art).length ? art : null;
-}
-
-// Song sections: three fixed slots; the arrangement is a playable sequence of
-// the non-empty ones. Playback flattens the arrangement into one bar list.
-const SECTION_IDS=['A','B','C'];
-const SECTION_LABELS={A:'Verse',B:'Chorus',C:'Bridge'};
-
-/* ---- Suggested choruses/bridges (the Suggest button on empty sections) ----
-   Degree-based like PROGRESSIONS. The forms are the tradition's common section
-   moves; names cite public-domain classics that made them famous (chord
-   progressions themselves aren't copyrightable — the names are the lesson). */
-const COUNTRY_IDEAS={
-  chorus:[
-    { name:'Circle (Will the Circle Be Unbroken)', bars:[[0],[0],[3],[0],[0],[0],[4],[0]] },
-    { name:'Lifted (starts on IV)', bars:[[3],[3],[0],[0],[3],[0],[4],[0]] },
-    { name:'Willow (Bury Me Beneath the Willow)', bars:[[0],[3],[0],[4],[0],[3],[4],[0]] },
-  ],
-  bridge:[
-    { name:'Middle Eight (IV opener)', bars:[[3],[3],[0],[0],[3],[3],[4],[4,'7']] },
-    { name:'Rhythm Bridge (I Got Rhythm, 1930)', bars:[[2,'7'],[2,'7'],[5,'7'],[5,'7'],[1,'7'],[1,'7'],[4,'7'],[4,'7']] },
-    { name:'Relative Minor (vi opener)', bars:[[5,'min'],[3],[0],[4],[5,'min'],[3],[4],[4,'7']] },
-    { name:'V-of-V (II7 bridge)', bars:[[0],[0],[1,'7'],[1,'7'],[4],[4],[4,'7'],[4,'7']] },
-  ],
-};
-const BLUES_IDEAS={
-  chorus:[
-    { name:'Quick-Change 12-Bar', bars:[[0,'7'],[3,'7'],[0,'7'],[0,'7'],[3,'7'],[3,'7'],[0,'7'],[0,'7'],[4,'7'],[3,'7'],[0,'7'],[4,'7']] },
-    { name:'Eight-Bar (Highway form)', bars:[[0,'7'],[4,'7'],[3,'7'],[3,'7'],[0,'7'],[4,'7'],[0,'7'],[4,'7']] },
-  ],
-  bridge:[
-    { name:'IV Vamp', bars:[[3,'7'],[3,'7'],[0,'7'],[0,'7'],[3,'7'],[3,'7'],[4,'7'],[4,'7']] },
-    { name:'Minor Plagal (iv drop)', bars:[[3],[3,'min'],[0],[0],[3],[3,'min'],[4,'7'],[4,'7']] },
-    { name:'Rhythm Bridge (I Got Rhythm, 1930)', bars:[[2,'7'],[2,'7'],[5,'7'],[5,'7'],[1,'7'],[1,'7'],[4,'7'],[4,'7']] },
-  ],
-};
-const SECTION_IDEAS={
-  oldtime:COUNTRY_IDEAS, bluegrass:COUNTRY_IDEAS, honkytonk:COUNTRY_IDEAS, altcountry:COUNTRY_IDEAS, countrywaltz:COUNTRY_IDEAS,
-  blues:BLUES_IDEAS, piedmont:BLUES_IDEAS, slowblues:BLUES_IDEAS,
-};
-
-const STORE_KEY = 'mrtriad.savedProgressions';
-const loadSaved = () => { try { return JSON.parse(localStorage.getItem(STORE_KEY))||[]; } catch { return []; } };
+// Preload every sample a schedule needs, routed to its instrument channel.
+const preloadSchedule = sc => Promise.all([
+  preload([...sc.guitarMidis.flat(),...sc.gfillMidis,...sc.leadMidis]),
+  preload(sc.bassMidis,'bass'),
+  preload(sc.pianoMidis,'piano'),
+  preload(sc.backupMidis,'backup'),
+  preloadDrums(),
+]);
 
 const MIXER_KEY = 'mrtriad.mixer';
 // Merge stored values over the defaults so new channels don't break old saves.
@@ -502,17 +45,6 @@ const MixSlider = ({label,min,max,step,value,onChange}) => (
     <span className="w-9 tabular-nums text-gray-500">{value}</span>
   </label>
 );
-
-function chordOf(bar,key) {
-  const root=(key+SCALE[bar.deg])%12;
-  return { root, quality:bar.q, name:NOTES[root]+QS[bar.q].s, numeral:DEGS[bar.deg].n+(bar.q==='7'?'7':'') };
-}
-
-const DEFAULT_GENRE=GENRES.find(g=>g.key==='oldtime');
-// Initial song: the default genre's first progression, with its set overrides
-// folded in — matches what clicking the style would produce.
-const DEFAULT_PROG=PROGRESSIONS[DEFAULT_GENRE.key][0];
-const DEFAULT_SET={...DEFAULT_GENRE,...DEFAULT_PROG.set};
 
 export default function Player() {
   const [key,setKey]=useState(7); // G
@@ -547,7 +79,7 @@ export default function Player() {
   const [playing,setPlaying]=useState(false);
   const [currentBar,setCurrentBar]=useState(null);
   const [editIdx,setEditIdx]=useState(null);
-  const [saved,setSaved]=useState(loadSaved);
+  const [saved,setSaved]=usePersistentState('mrtriad.savedProgressions',[]);
   const [saveName,setSaveName]=useState('');
   const [moreOpen,setMoreOpen]=useState(false);
   const [mixer,setMixer]=useState(loadMixer);
@@ -557,10 +89,10 @@ export default function Player() {
   const [suggestOpen,setSuggestOpen]=useState(false); // chorus/bridge suggestions for the empty active section
   const [bandOpen,setBandOpen]=useState(false); // band chip rows are override detail; genre sets them all
   const [songOpen,setSongOpen]=useState(true); // open by default — it's the session's entry point
-  const [guitarSet,setGuitarSet]=useState(()=>localStorage.getItem('mrtriad.guitarSet')||DEFAULT_GENRE.guitarInst||'fatboy');
-  const [bassSet,setBassSet]=useState(()=>localStorage.getItem('mrtriad.bassSet')||DEFAULT_GENRE.bassInst||'upright');
-  const [pianoSet,setPianoSet]=useState(()=>localStorage.getItem('mrtriad.pianoSet')||DEFAULT_GENRE.pianoInst||'vcsl');
-  const [backupSet,setBackupSet]=useState(()=>localStorage.getItem('mrtriad.backupSet')||'banjo');
+  const [guitarSet,setGuitarSet]=usePersistentState('mrtriad.guitarSet',DEFAULT_GENRE.guitarInst||'fatboy',{raw:true});
+  const [bassSet,setBassSet]=usePersistentState('mrtriad.bassSet',DEFAULT_GENRE.bassInst||'upright',{raw:true});
+  const [pianoSet,setPianoSet]=usePersistentState('mrtriad.pianoSet',DEFAULT_GENRE.pianoInst||'vcsl',{raw:true});
+  const [backupSet,setBackupSet]=usePersistentState('mrtriad.backupSet','banjo',{raw:true});
   const playRef=useRef(null);
   const loopRef=useRef(loop);
   loopRef.current=loop;
@@ -741,10 +273,10 @@ export default function Player() {
   useEffect(()=>stop,[stop]); // unmount
   useEffect(()=>{ setAudioSettings(mixer); },[mixer]); // live — audio params only, no schedule rebuild
   // Must run before the schedule-rebuild effect below so its preload hits the new folder.
-  useEffect(()=>{ applyGuitarSet(guitarSet); localStorage.setItem('mrtriad.guitarSet',guitarSet); },[guitarSet]);
-  useEffect(()=>{ applyBassSet(bassSet); localStorage.setItem('mrtriad.bassSet',bassSet); },[bassSet]);
-  useEffect(()=>{ applyPianoSet(pianoSet); localStorage.setItem('mrtriad.pianoSet',pianoSet); },[pianoSet]);
-  useEffect(()=>{ applyBackupSet(backupSet); localStorage.setItem('mrtriad.backupSet',backupSet); },[backupSet]);
+  useEffect(()=>{ applyGuitarSet(guitarSet); },[guitarSet]);
+  useEffect(()=>{ applyBassSet(bassSet); },[bassSet]);
+  useEffect(()=>{ applyPianoSet(pianoSet); },[pianoSet]);
+  useEffect(()=>{ applyBackupSet(backupSet); },[backupSet]);
   // The initial style's baked mix — applyGenre/applySetOverrides cover every later change.
   useEffect(()=>{ setMix(DEFAULT_SET.mix); },[]);
 
@@ -809,178 +341,10 @@ export default function Player() {
   // The full loop as a flat event list — a pure function of the current settings.
   // Playback walks whatever schedule sits in playRef; rebuilding and swapping it
   // mid-play (effect below start) is how settings change without stopping.
-  const buildSchedule=useCallback(()=>{
-    const M=METERS[meter]||METERS['4/4'];
-    const spb=60/tempo, barDur=M.beats*spb;
-    const passBars=flat.playLen; // one pass = the whole arrangement, flattened
-    const loopDur=passOrder.length*passBars*barDur;
-    // Shuffle: offbeat eighths land on the triplet 2/3 instead of halfway.
-    // Compound meters (6/8) are already triplet-based, so shuffle is a no-op.
-    const sw=(feel==='shuffle'&&M.swing)?(b=>Math.floor(b)+(b%1?2/3:0)):(b=>b);
-    // Guards: a stale knob/meter combo mid-rebuild falls back instead of crashing.
-    const strumPat=STRUMS[strum].p[meter]||STRUMS.folk.p[meter];
-    const drumPat=drums==='off'?null:(DRUM_PATTERNS[drums]?.[meter]||DRUM_PATTERNS.kit[meter]);
-    const bassEff=bassMode==='off'?'off':(BASS_METERS[bassMode]?.includes(meter)?bassMode:'root5');
-    const fill3=M.grid.slice(-3), fill4=M.grid.slice(-4), lastSlot=M.grid[M.grid.length-1];
-    const events=[];
-    const bassMidis=[],leadMidis=[],pianoMidis=[],backupMidis=[],gfillMidis=[];
-    const guitarMidis=[]; // flattened: pass*passBars + bar
-    let leadLast=null; // walker carries across bars so lines connect through chord changes
-    // One pass through the bars per entry in passOrder; climbing plays the
-    // progression at each position in turn (vary: at each same-position shape),
-    // transitions on the loop boundary.
-    passOrder.forEach((anchor,pass)=>{
-    const path=passPath(anchor);
-    for (let i=0;i<passBars;i++) {
-      const gi=pass*passBars+i;
-      const base=gi*barDur;
-      let midis=[];
-      if (sound!=='off') {
-        if (sound==='cowboy'&&grips[i]) midis=[6,5,4,3,2,1].filter(s=>grips[i].frets[s]).map(s=>STRING_MIDI[s]+grips[i].frets[s].fret);
-        else if (path[i]) midis=voicingMidis(path[i].set.strs,path[i].frets);
-      }
-      guitarMidis.push(midis);
-      // Guitar fills: drop the last three strums and pick a chromatic bass run
-      // walking into the next bar's chord — the country rhythm-guitar move.
-      const nextCh=chords[(i+1)%passBars];
-      const gFillHere=guitarFills&&sound!=='off'&&GFILL_STRUMS.includes(strum)&&!(nextCh.root===chords[i].root&&nextCh.quality===chords[i].quality)&&midis.length;
-      strumPat.forEach(p=>{ if (gFillHere&&p.b>=fill3[0]) return; events.push({t:base+sw(p.b)*spb,type:'strum',i:gi,dir:p.dir,g:p.g,span:p.span}); });
-      if (gFillHere) {
-        const gTarget=40+((nextCh.root-4+12)%12);
-        const gCur=40+((chords[i].root-4+12)%12);
-        const gSide=(gTarget>=gCur&&gTarget-3>=40)?-1:1;
-        const gRun=[3,2,1].map(k=>gTarget+gSide*k);
-        fill3.forEach((b,k)=>{ events.push({t:base+sw(b)*spb,type:'gfill',m:gRun[k],g:0.85}); gfillMidis.push(gRun[k]); });
-      }
-      if (drumPat) drumPat.forEach(d=>events.push({t:base+(d.sw?sw(d.b):d.b)*spb,type:'drum',kind:d.kind,g:d.g}));
-      if (drumFills&&!['off','stomp'].includes(drums)&&passBars>=4&&(i+1)%4===0) {
-        const fill=DRUM_FILLS[Math.floor(Math.random()*DRUM_FILLS.length)];
-        const soft=drums==='train'?0.8:1; // brushes-era kit plays fills gentler
-        fill3.forEach((b,k)=>events.push({t:base+sw(b)*spb,type:'drum',kind:fill[k][0],g:fill[k][1]*soft}));
-      }
-      if (bassEff!=='off') {
-        const ch=chords[i];
-        const rootM=28+((ch.root-4+12)%12);          // E1..D#2
-        const minish=isMinorFamily(ch.quality);
-        const third=minish?3:4, fifth=ch.quality==='dim'?6:7, sixth=minish?10:9;
-        const fifthM=rootM-(12-fifth)>=28?rootM-(12-fifth):rootM+fifth;
-        const next=chords[(i+1)%passBars];
-        const nextRootM=28+((next.root-4+12)%12);
-        const sameNext=next.root===ch.root&&next.quality===ch.quality;
-        const approach=sameNext?rootM+sixth:(nextRootM-1>=28?nextRootM-1:nextRootM+1);
-        const pushBass=(b,m,g,swung=false)=>{ events.push({t:base+(swung?sw(b):b)*spb,type:'bass',m,g}); bassMidis.push(m); };
-        // Bass fills: a three-note chromatic walkup (or -down) into the next
-        // bar's root whenever the chord changes — the country/bluegrass move
-        // that makes Root/Root–5th feel alive without full-time Walking.
-        const bassFillHere=bassFills&&!sameNext&&(bassEff==='root'||bassEff==='root5');
-        if (bassEff==='root') {
-          pushBass(0,rootM,1);
-          if (meter==='6/8'&&!bassFillHere) pushBass(1,rootM,0.75); // both pulses
-        } else if (bassEff==='root5') {
-          pushBass(0,rootM,1);
-          // Skip the fifth when the fill run would land on top of it (3/4 & 6/8).
-          const fifthB=meter==='6/8'?1:2;
-          if (!(bassFillHere&&fifthB>=fill3[0])) pushBass(fifthB,fifthM,0.85);
-        } else if (bassEff==='walk') {
-          if (meter==='3/4') { pushBass(0,rootM,1); pushBass(1,rootM+third,0.85); pushBass(2,approach,0.85); }
-          else if (meter==='6/8') { pushBass(0,rootM,1); pushBass(1,fifthM,0.85); if (!sameNext) pushBass(5/3,approach,0.6); }
-          else { pushBass(0,rootM,1); pushBass(1,rootM+third,0.85); pushBass(2,rootM+fifth,0.9); pushBass(3,approach,0.85); }
-        } else if (bassEff==='boogie') {
-          const line=[0,0,third,third,fifth,fifth,sixth,sixth];
-          [0,0.5,1,1.5,2,2.5,3,3.5].forEach((b,k)=>pushBass(b,rootM+line[k],b%1?0.7:0.95,true));
-        } else if (bassEff==='bossa') {
-          pushBass(0,rootM,1); pushBass(1.5,fifthM,0.7); pushBass(2,rootM,0.9); pushBass(3.5,fifthM,0.7);
-        } else if (bassEff==='funk') {
-          pushBass(0,rootM,1); pushBass(1.75,rootM+12,0.7); pushBass(2.5,rootM,0.9); pushBass(3.25,rootM+fifth,0.65);
-        }
-        if (bassFillHere) {
-          // Approach from below when the target sits above (and there's room),
-          // else from above — either way three even steps landing on the root.
-          const side=(nextRootM>=rootM&&nextRootM-3>=28)?-1:1;
-          const run=[3,2,1].map(k=>nextRootM+side*k);
-          fill3.forEach((b,k)=>pushBass(b,run[k],0.8,true));
-        }
-      }
-      if (keys!=='off') {
-        const pc=chords[i].root;
-        const rootM=pc<6?60+pc:48+pc; // root position around middle C
-        const pv=QS[chords[i].quality].iv.map(iv=>rootM+iv);
-        const hits=meter==='3/4'?[[0,0.6],[1,0.45],[2,0.45]]           // oom-pah-pah
-          :meter==='6/8'?[[0,0.6],[1,0.5]]                              // both pulses
-          :feel==='shuffle'?[[0,0.6],[2.5,0.45]]:[[0,0.6],[2,0.5]];
-        hits.forEach(([b,g])=>events.push({t:base+sw(b)*spb,type:'piano',m:pv,g}));
-        pianoMidis.push(...pv);
-        if (keys==='fills'&&passBars>=4&&(i+1)%4===0) {
-          // chord-tone run an octave up, ringing over the comp into the next bar
-          const pool=pv.map(m=>m<66?m+12:m).sort((a,b)=>a-b);
-          const dir=Math.random()<0.5?1:-1;
-          let idx=dir===1?0:pool.length-1;
-          fill3.forEach(b=>{
-            const m=pool[Math.max(0,Math.min(pool.length-1,idx))];
-            events.push({t:base+sw(b)*spb,type:'pianoNote',m,g:0.5});
-            pianoMidis.push(m);
-            idx+=dir;
-          });
-        }
-      }
-      if (backup!=='off') {
-        const ch=chords[i];
-        const minish=isMinorFamily(ch.quality);
-        const third=minish?3:4, fifth=ch.quality==='dim'?6:7;
-        const rootM=50+((ch.root-2+12)%12); // banjo register D3..C#4
-        const pool=[rootM,rootM+third,rootM+fifth,rootM+12<=BACKUP_TOP?rootM+12:rootM+fifth];
-        for (const p of (BACKUP_PATTERNS[backup][meter]||[])) {
-          const t=base+sw(p.b)*spb;
-          if (p.chord) {
-            [0,1,2].forEach(n=>{ events.push({t,type:'backup',m:pool[n],g:p.g*(n===0?1:0.8),chop:true}); backupMidis.push(pool[n]); });
-          } else {
-            events.push({t,type:'backup',m:pool[p.n],g:p.g}); backupMidis.push(pool[p.n]);
-          }
-        }
-      }
-      if (lead!=='off'&&path[i]) {
-        const pool=leadPool(chords[i],path[i],path[i].set.strs);
-        if (pool.length>2) {
-          const nearest=m=>pool.reduce((b,x,j)=>Math.abs(x-m)<Math.abs(pool[b]-m)?j:b,0);
-          if (lead==='solo') {
-            for (const b of M.grid) {
-              if (Math.random()<(b===0?0.55:0.3)) continue; // rests keep it from droning
-              let idx;
-              if (leadLast===null) idx=Math.floor(pool.length*0.6);
-              else {
-                idx=nearest(leadLast);
-                const r=Math.random();
-                idx+=r<0.38?-1:r<0.76?1:r<0.88?-2:2;
-                idx=Math.max(0,Math.min(pool.length-1,idx));
-              }
-              const prevM=leadLast;
-              leadLast=pool[idx];
-              leadMidis.push(leadLast);
-              const art=leadArt(pool,idx,prevM,b,false);
-              if (art?.double!=null) leadMidis.push(art.double);
-              events.push({t:base+sw(b)*spb+(Math.random()-0.5)*0.014,type:'lead',m:leadLast,g:b%1?0.5:0.62,art});
-            }
-          } else if ((i+1)%leadEvery===0) { // fills: a directed run every leadEvery bars
-            const dir=Math.random()<0.5?1:-1;
-            let idx=leadLast!==null?nearest(leadLast):Math.floor(pool.length*(dir===1?0.3:0.7));
-            for (const b of fill4) {
-              idx=Math.max(0,Math.min(pool.length-1,idx+dir));
-              const prevM=leadLast;
-              leadLast=pool[idx];
-              leadMidis.push(leadLast);
-              const art=leadArt(pool,idx,prevM,b,b===lastSlot);
-              if (art?.double!=null) leadMidis.push(art.double);
-              events.push({t:base+sw(b)*spb+(Math.random()-0.5)*0.014,type:'lead',m:leadLast,g:b%1?0.52:0.62,art});
-            }
-          }
-        }
-      }
-    }
-    });
-    events.sort((a,b)=>a.t-b.t);
-    return {events,loopDur,barDur,spb,guitarMidis,gfillMidis,bassMidis,leadMidis,pianoMidis,backupMidis,passBars};
-  // guitarSet is a dep so switching sample sets re-preloads and hot-swaps mid-play.
-  },[flat,chords,meter,tempo,feel,strum,drums,drumFills,bassMode,bassFills,guitarFills,backup,lead,leadEvery,keys,passOrder,passPath,grips,sound,guitarSet,bassSet,pianoSet,backupSet]);
+  const buildSchedule=useCallback(()=>buildScheduleFn({
+    flat,chords,meter,tempo,feel,strum,drums,drumFills,bassMode,bassFills,guitarFills,backup,lead,leadEvery,keys,passOrder,passPath,grips,sound,
+  // guitarSet/bassSet/pianoSet/backupSet are deps so switching sample sets re-preloads and hot-swaps mid-play.
+  }),[flat,chords,meter,tempo,feel,strum,drums,drumFills,bassMode,bassFills,guitarFills,backup,lead,leadEvery,keys,passOrder,passPath,grips,sound,guitarSet,bassSet,pianoSet,backupSet]);
 
   const tick=useCallback(()=>{
     const st=playRef.current;
@@ -1018,7 +382,7 @@ export default function Player() {
     ensureCtx();
     const sc=buildSchedule();
     if (!sc.passBars) return; // empty song (all sections empty or arrangement empty)
-    Promise.all([preload([...sc.guitarMidis.flat(),...sc.gfillMidis,...sc.leadMidis]),preload(sc.bassMidis,'bass'),preload(sc.pianoMidis,'piano'),preload(sc.backupMidis,'backup'),preloadDrums()]).then(()=>{
+    preloadSchedule(sc).then(()=>{
       const st={...sc,t0:ctxTime()+0.12,nextIdx:0};
       st.timer=setInterval(tick,50);
       playRef.current=st;
@@ -1034,7 +398,7 @@ export default function Player() {
     if (!playRef.current) return;
     const sc=buildSchedule();
     const seq=++rebuildSeq.current;
-    Promise.all([preload([...sc.guitarMidis.flat(),...sc.gfillMidis,...sc.leadMidis]),preload(sc.bassMidis,'bass'),preload(sc.pianoMidis,'piano'),preload(sc.backupMidis,'backup'),preloadDrums()]).then(()=>{
+    preloadSchedule(sc).then(()=>{
       const st=playRef.current;
       if (!st||seq!==rebuildSeq.current) return; // stopped, or a newer rebuild superseded this one
       const now=ctxTime();
@@ -1120,9 +484,7 @@ export default function Player() {
     const name=saveName.trim();
     if (!name) return;
     const entry={name,key,meter,tempo,sections,arrangement,pins,feel,strum,drums,drumFills,bassMode,bassFills,guitarFills,backup,lead,leadEvery,keys,genre};
-    const next=[...saved.filter(s=>s.name!==name),entry];
-    setSaved(next);
-    localStorage.setItem(STORE_KEY,JSON.stringify(next));
+    setSaved([...saved.filter(s=>s.name!==name),entry]);
   };
   const loadEntry=s=>{
     const m=s.meter&&METERS[s.meter]?s.meter:'4/4'; // legacy saves are 4/4
@@ -1152,11 +514,7 @@ export default function Player() {
     setMix(ge?.mix); // saved entries don't store mix; use the style's baked one
     setSaveName(s.name); setEditIdx(null); setPickIdx(null);
   };
-  const deleteEntry=name=>{
-    const next=saved.filter(s=>s.name!==name);
-    setSaved(next);
-    localStorage.setItem(STORE_KEY,JSON.stringify(next));
-  };
+  const deleteEntry=name=>setSaved(saved.filter(s=>s.name!==name));
 
   const btn=(on)=>`px-3 py-1.5 rounded text-sm font-medium transition-all ${on?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`;
 
