@@ -128,6 +128,7 @@ export default function Player() {
   const [posSel,setPosSel]=useState([]); // climb subset (position indices); empty = all
   const [livePass,setLivePass]=useState(0);
   const [pins,setPins]=useState({});
+  const [rolls,setRolls]=useState({}); // Randomize picks, keyed sec:bar:position (ephemeral; a manual pin overrides)
   // More than one set active → cross-set voice-leading: each chord takes the
   // voicing that keeps the hand in the position, crossing sets where it fits
   // (posCost). A single set is just the closestVoicing path.
@@ -175,6 +176,10 @@ export default function Player() {
       const pin=!m?null:(pins[`${m.sec}:${m.j}:${anchor}`]??pins[`${m.sec}:${m.j}`]??null);
       const pinned=pin!=null?cands.find(v=>pinKeyOf(v)===pin):null;
       if (pinned) { path.push(pinned); win=centerOf(pinned); continue; }
+      // Randomize picks (within the position window) — a pin above overrides them.
+      const roll=!m?null:rolls[`${m.sec}:${m.j}:${anchor}`];
+      const rolled=roll!=null?cands.find(v=>pinKeyOf(v)===roll):null;
+      if (rolled) { path.push(rolled); continue; }
       if (i>0&&chords[i-1].root===ch.root&&chords[i-1].quality===ch.quality&&path[i-1]) { path.push(path[i-1]); continue; }
       if (i===0) {
         const list=anchorsFrom(cands);
@@ -194,7 +199,7 @@ export default function Player() {
       }
     }
     return path;
-  },[chords,flat,candidatesFor,anchorsFrom,pins,multi]);
+  },[chords,flat,candidatesFor,anchorsFrom,pins,rolls,multi]);
 
   // Vary mode: a shuffled order through the neck positions — each loop jumps to
   // a different one (vs climb's orderly up-and-down). Reshuffles only when the
@@ -238,6 +243,32 @@ export default function Player() {
   // Pin key/value for the bar in the currently displayed position (scoped to it).
   const barPinKey=i=>`${activeSec}:${i}:${displayAnchor}`;
   const barPinVal=i=>pins[barPinKey(i)]??pins[`${activeSec}:${i}`];
+
+  // Randomize: re-voice each bar (past the anchor) at the displayed position by
+  // picking a random voicing from those inside the position's fret window (±3) —
+  // so the hand stays in the box; only the inversion/set varies. Scoped to that
+  // position; a manual pin still overrides. Clear returns to the smooth default.
+  const posHasRoll=Object.keys(rolls).some(k=>k.endsWith(`:${displayAnchor}`));
+  const randomize=()=>{
+    const cands0=chords.length?candidatesFor(chords[0]):[];
+    const list=anchorsFrom(cands0);
+    const anchorV=list[Math.min(displayAnchor,Math.max(0,list.length-1))];
+    const win=anchorV?centerOf(anchorV):0;
+    setRolls(prev=>{
+      const n={...prev};
+      flat.map.forEach((m,i)=>{
+        if (i===0) return; // bar 0 anchors the position — leave it
+        const cands=candidatesFor(chords[i]);
+        // In the box: closed voicings within ±3 frets of the position center.
+        const closed=cands.filter(v=>!hasOpenString(v.frets));
+        const windowed=closed.filter(v=>Math.abs(centerOf(v)-win)<=3);
+        const pool=windowed.length?windowed:(closed.length?closed:cands);
+        if (pool.length) n[`${m.sec}:${m.j}:${displayAnchor}`]=pinKeyOf(pool[Math.floor(Math.random()*pool.length)]);
+      });
+      return n;
+    });
+  };
+  const clearRoll=()=>setRolls(prev=>Object.fromEntries(Object.entries(prev).filter(([k])=>!k.endsWith(`:${displayAnchor}`))));
 
   const fretWindow=v=>{
     if (!v) return '';
@@ -316,7 +347,7 @@ export default function Player() {
     const first=PROGRESSIONS[g.key][0];
     setSections({A:toBars(first.bars),B:[],C:[]});
     setArrangement(['A']); setActiveSec('A');
-    setEditIdx(null); setPickIdx(null); setMoreOpen(false); setPins({}); setPosIdx(0); setPosSel([]);
+    setEditIdx(null); setPickIdx(null); setMoreOpen(false); setPins({}); setRolls({}); setPosIdx(0); setPosSel([]);
     applySetOverrides(first,g);
   };
 
@@ -332,7 +363,7 @@ export default function Player() {
   const createNew=()=>{
     setSections({A:[{deg:0,q:'maj'}],B:[],C:[]});
     setArrangement(['A']); setActiveSec('A');
-    setEditIdx(0); setPickIdx(null); setMoreOpen(false); setPins({}); setPosIdx(0); setPosSel([]);
+    setEditIdx(0); setPickIdx(null); setMoreOpen(false); setPins({}); setRolls({}); setPosIdx(0); setPosSel([]);
   };
 
   // The full loop as a flat event list — a pure function of the current settings.
@@ -440,7 +471,7 @@ export default function Player() {
   const applyIdea=p=>{
     setSectionBars(activeSec,toBars(p.bars));
     setPins(ps=>Object.fromEntries(Object.entries(ps).filter(([k])=>!k.startsWith(activeSec+':'))));
-    setSuggestOpen(false); setPosIdx(0); setPosSel([]);
+    setRolls({}); setSuggestOpen(false); setPosIdx(0); setPosSel([]);
   };
 
   // Fills the active section (build a chorus by switching tabs and picking again).
@@ -448,21 +479,24 @@ export default function Player() {
     setSectionBars(activeSec,toBars(p.bars));
     setEditIdx(null); setPickIdx(null); setMoreOpen(false); setPosIdx(0); setPosSel([]);
     setPins(ps=>Object.fromEntries(Object.entries(ps).filter(([k])=>!k.startsWith(activeSec+':'))));
-    applySetOverrides(p);
+    setRolls({}); applySetOverrides(p);
   };
   // Pins are keyed "section:barIndex" or "section:barIndex:position"; structural
   // edits re-home the active section's pins (preserving any position suffix) and
   // leave other sections' alone.
-  const remapPins=fn=>setPins(ps=>{
-    const n={};
-    for (const [k,v] of Object.entries(ps)) {
-      const [sec,jStr,...rest]=k.split(':'), j=+jStr;
-      if (sec!==activeSec) { n[k]=v; continue; }
-      const nj=fn(j);
-      if (nj!=null) n[[sec,nj,...rest].join(':')]=v;
-    }
-    return n;
-  });
+  const remapPins=fn=>{
+    setRolls({}); // a bar edit invalidates the current roll
+    setPins(ps=>{
+      const n={};
+      for (const [k,v] of Object.entries(ps)) {
+        const [sec,jStr,...rest]=k.split(':'), j=+jStr;
+        if (sec!==activeSec) { n[k]=v; continue; }
+        const nj=fn(j);
+        if (nj!=null) n[[sec,nj,...rest].join(':')]=v;
+      }
+      return n;
+    });
+  };
   const setBar=(i,patch)=>{
     setBars(bs=>bs.map((b,j)=>j===i?{...b,...patch}:b));
     remapPins(j=>j===i?null:j); // a different chord invalidates the pinned voicing
@@ -494,7 +528,7 @@ export default function Player() {
       setSections({A:s.bars,B:[],C:[]});
       setArrangement(['A']);
     }
-    setActiveSec('A'); setPins(s.pins||{}); setPosIdx(0);
+    setActiveSec('A'); setPins(s.pins||{}); setRolls({}); setPosIdx(0);
     setStrum(s.strum&&STRUMS[s.strum]?.p[m]?s.strum:'folk');
     setDrums(s.drums&&s.drums!=='off'?(DRUM_PATTERNS[s.drums]?.[m]?s.drums:'kit'):'off');
     setDrumFills(!!s.drumFills);
@@ -849,6 +883,11 @@ export default function Player() {
               <button onClick={()=>setPosIdx(Math.max(0,pi-1))} disabled={pi<=0} className="px-2.5 py-1 rounded text-xs font-medium bg-gray-800 text-gray-300 hover:bg-gray-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed">▼</button>
               <button onClick={()=>setPosIdx(Math.min(positions.length-1,pi+1))} disabled={pi>=positions.length-1} className="px-2.5 py-1 rounded text-xs font-medium bg-gray-800 text-gray-300 hover:bg-gray-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed">▲</button>
             </>)}
+            <span className="inline-flex items-center gap-1.5 ml-1">
+              <button onClick={randomize} title="Re-voice this position with random shapes — kept inside the same fret box. Press again for a new roll."
+                className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${posHasRoll?'border-emerald-500 text-emerald-400':'border-gray-700 text-gray-300 hover:text-white hover:border-emerald-500 hover:bg-emerald-700'}`}>🎲 Randomize</button>
+              {posHasRoll&&<button onClick={clearRoll} title="Back to the smoothest voicing at this position" className="text-[10px] text-gray-500 hover:text-gray-300 transition-colors">Clear</button>}
+            </span>
           </div>
           )}
         </div>
