@@ -149,7 +149,7 @@ export const BASS_SETS = { upright:'bass', electric:'bass-electric' };
 export const PIANO_SETS = { vcsl:'piano', osiris:'piano-osiris', rhodes:'piano-rhodes' };
 // The Backup channel's instrument (a second rhythm voice over the guitar).
 // Single set today; mandolin/accordion later are a folder + one chip.
-export const BACKUP_SETS = { banjo:'guitar-ganjo' };
+export const BACKUP_SETS = { banjo:'guitar-ganjo', accordion:'backup-accordion' };
 let guitarFolder = GUITAR_SETS.fatboy;
 let bassFolder = BASS_SETS.upright;
 let pianoFolder = PIANO_SETS.vcsl;
@@ -277,6 +277,7 @@ const SET_TRIM = {
   'guitar-shiny':0.22, 'guitar-ganjo':0.11, // mastered near full scale; measured 2026-07-10
   'guitar-standard':0.3, 'guitar-stdmute':1, // measured vs FatBoy 2026-07-13
   'guitar-shinyac':0.19, 'guitar-emily':0.24, 'guitar-ovation':0.1, 'guitar-spanish':0.08, // acoustics vs FatBoy 2026-07-13
+  'backup-accordion':0.1,                   // measured vs ganjo-as-backup 2026-07-14
   'bass':1, 'bass-electric':1,
   'piano':1, 'piano-osiris':1.2,            // measured vs VCSL 2026-07-10
   'piano-rhodes':0.75,                      // measured vs VCSL 2026-07-13 (attack RMS, mid roots)

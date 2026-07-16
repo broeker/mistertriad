@@ -65,6 +65,17 @@
   Unused articulations parked in the archive: alternate strokes, slides,
   hammers/pulls, harmonics, brush, fret-mute (interesting for a future
   strum-engine articulation pass).
+- **2026-07-14 — Backup switcher + accordion; mandolin gated.** Imported
+  FreePats `button-accordion-HN` (CC0) → `backup-accordion` (Accordion chip
+  in the Backup mixer strip): 17 roots B2–G5, per-region `tune=` corrections
+  (reeds ran 19–38 cents sharp) baked in via asetrate resample, 2.7 s capped
+  one-shots, trim 0.1 vs ganjo-as-backup. Full `backupSet` plumbing
+  (state / localStorage / `backupInst` in applyGenre + Copy style / schedule
+  dep) — Sonnet-delegated, reviewed. **Mandolin blocked on human-gated
+  downloads**: Decent Samples' free Stella Bowlback ($0 email checkout) and
+  Pianobook's Vintage Japanese Mandolin (login) are the candidates; VCSL has
+  none; musical-artifacts is Cloudflare-walled. Tim downloads one, drops it
+  in the project, import is ready to run → `backup-mandolin` + Mandolin chip.
 - **2026-07-13 (acoustic batch)** — Tim wanted the full acoustic audition pool
   (data point: he's been preferring Musyng over FatBoy). **Imported four
   sets** (~10 MB total): `guitar-shinyac` (**A.Shiny** — Shinyguitar's
@@ -299,6 +310,20 @@ lawyer-minute at the time.
 
 Rule going forward: every non-CC0 import gets its license named in the
 footer credit and a row here.
+
+## Stomp upgrade (the last synthesized sound)
+
+The drums' Stomp piece is the only fully synthesized sound left (code-generated,
+no samples; brush has real Swirly samples with synth as fallback only).
+Tim declined DIY (2026-07-13). **IMPORTED**: Freesound "foot stompin" by
+itinerantmonk108 (#740039, CC0 — wood-floor foot taps, 48k/24-bit source,
+HQ preview MP3 used). Onset-detected 6 hits via RMS envelope, sliced the 4
+clean ones into `stomp_rr1–4.mp3` (one layer × 4 RRs), added a `stomp`
+piece to the drums manifest with trim 0.7 (attack-RMS matched to sit just
+under the kick). The synth stomp remains as the not-yet-loaded fallback.
+If Tim ever records his own, it drops into the same piece.
+Upgrade path if this one disappoints: brettrader's "Stomp Soft"/"Stomps"
+(683044/683045) or dilly_deelin's two-footed Tascam stomp (784295), all CC0.
 
 ## Offbeat expansions (keep in mind)
 
