@@ -8,8 +8,8 @@ import { fretWindow } from './fretboard.js';
 import { centerOf, posCost, pinKeyOf } from './arranger.js';
 import { strum, voicingMidis } from './audio.js';
 
-// Default active string sets (6-5-4 off by default — reads low/muddy — but selectable).
-const DEFAULT_SETS = ['321','432','543'];
+// Default active string sets (5-4-3 and 6-5-4 off by default, but selectable).
+const DEFAULT_SETS = ['321','432'];
 // Fret-range label for the Position readout, e.g. "frets 3–5".
 const fretRangeLabel = v => {
   if (!v) return '';

@@ -381,9 +381,9 @@ export const DRUM_FILLS = [
 ];
 
 // "Auto" searches voicings across these sets and voice-leads between them the
-// way a player crosses sets moving up the neck. 6-5-4 is left out of the
-// default — triads that low read as mud under a band (but it stays selectable).
-export const DEFAULT_SETS=['321','432','543'];
+// way a player crosses sets moving up the neck. 5-4-3 and 6-5-4 are left out of
+// the default — the lower sets read muddy under a band — but stay selectable.
+export const DEFAULT_SETS=['321','432'];
 
 // Song sections: three fixed slots; the arrangement is a playable sequence of
 // the non-empty ones. Playback flattens the arrangement into one bar list.

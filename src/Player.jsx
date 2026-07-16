@@ -338,6 +338,14 @@ export default function Player() {
     applyGenre(GENRES.find(g=>g.group===gr));
   };
 
+  // Start a fresh one-bar song (on the I chord) to build from scratch — keeps
+  // the current sound (band, tempo, meter, genre, sample sets all untouched).
+  const createNew=()=>{
+    setSections({A:[{deg:0,q:'maj'}],B:[],C:[]});
+    setArrangement(['A']); setActiveSec('A');
+    setEditIdx(0); setPickIdx(null); setMoreOpen(false); setPins({}); setPosIdx(0); setPosSel([]);
+  };
+
   // The full loop as a flat event list — a pure function of the current settings.
   // Playback walks whatever schedule sits in playRef; rebuilding and swapping it
   // mid-play (effect below start) is how settings change without stopping.
@@ -576,6 +584,9 @@ export default function Player() {
                 More… ({(PROGRESSIONS[genre]||[]).length-FEATURED})
               </button>
             )}
+            <button onClick={createNew} title="Start a fresh progression from scratch — keeps your current sound" className="px-3 py-1.5 rounded text-sm font-medium border border-dashed border-emerald-700 text-emerald-400 hover:text-emerald-300 hover:border-emerald-500 transition-all">
+              ＋ New
+            </button>
           </div>
         </div>
         {moreOpen&&(
