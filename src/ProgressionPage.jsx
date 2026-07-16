@@ -5,7 +5,7 @@ import {
 } from './music.js';
 import FretDiag, { NoteList } from './FretDiag.jsx';
 import { fretWindow } from './fretboard.js';
-import { centerOf, pinKeyOf } from './arranger.js';
+import { centerOf, posCost, pinKeyOf } from './arranger.js';
 import { strum, voicingMidis } from './audio.js';
 
 // Default active string sets (5-4-3 and 6-5-4 off by default, but selectable).
@@ -289,8 +289,9 @@ export default function ProgressionPage() {
     return {notes:nts,root,name:NOTES[root]+QS[p.q].s,numeral:p.numeral,quality:p.q};
   }),[key,prog]);
 
-  // More than one set active → each set contributes its own neck positions
-  // (each pass rides one set); a single set is just nearest-fret closestVoicing.
+  // More than one set active → cross-set voice-leading: each chord takes the
+  // voicing that keeps the hand in the position, crossing sets where it fits
+  // (posCost). A single set is just nearest-fret closestVoicing.
   const multi=selectedSets.length>1;
   const toggleSet=useCallback(k=>setSelectedSets(cur=>{
     const next=cur.includes(k)?cur.filter(x=>x!==k):[...cur,k];
@@ -310,51 +311,46 @@ export default function ProgressionPage() {
     return out.sort((a,b)=>centerOf(a)-centerOf(b));
   },[selectedSets]);
 
-  // Selectable neck anchors for bar 1, low to high. In multi-set mode each set
-  // contributes its own positions (collapsed within the set), then all are merged
-  // and ordered by neck location — so a lower-fret set never swallows a higher
-  // one, and every active set is reachable via the Position stepper.
+  // Selectable neck positions for bar 1, low to high (voicings sharing a fret
+  // window collapse into one position). These are neck locations, not sets —
+  // the set mix within a pass is chosen per chord by the voice-leading.
   const anchorsFrom=useCallback(cands=>{
     const closed=cands.filter(v=>!hasOpenString(v.frets));
     const list=closed.length?closed:cands;
     if (!multi) return list;
     const out=[];
-    for (const set of STRING_SETS) {
-      let last=null;
-      for (const v of list) if (v.set.key===set.key&&(last===null||centerOf(v)-last>=2)) { out.push(v); last=centerOf(v); }
-    }
-    return out.sort((a,b)=>centerOf(a)-centerOf(b));
+    for (const v of list) if (!out.length||centerOf(v)-centerOf(out[out.length-1])>=2) out.push(v);
+    return out;
   },[multi]);
 
   const positions=useMemo(()=>chords.length?anchorsFrom(candidatesFor(chords[0])):[],[chords,candidatesFor,anchorsFrom]);
   const pi=Math.min(posIdx,Math.max(0,positions.length-1));
 
-  // The voice-led path from the chosen neck anchor. Pins force a bar's voicing
+  // The voice-led path from the chosen neck position. Pins force a bar's voicing
   // (later bars re-lead from it); repeated chords keep their voicing; otherwise
-  // the whole pass rides the anchor's set (nearest-fret within it), so each pass
-  // stays on one set and both sets are reachable via Position. A pin is an island.
+  // each chord takes the voicing nearest the position's fret window across the
+  // active sets (posCost) — so a single pass mixes 3-2-1 / 4-3-2 where it fits.
   const path=useMemo(()=>{
     if (!chords.length) return [];
     const p=[];
-    let passSet=null;
+    let win=null;
     for (let i=0;i<chords.length;i++){
       const ch=chords[i];
       const cands=candidatesFor(ch);
       if (!cands.length){p.push(null);continue;}
       const pin=pins[i]??null;
       const pinned=pin!=null?cands.find(v=>pinKeyOf(v)===pin):null;
-      if (pinned){p.push(pinned);if(i===0)passSet=pinned.set.key;continue;}
+      if (pinned){p.push(pinned);win=centerOf(pinned);continue;}
       if (i>0&&chords[i-1].root===ch.root&&chords[i-1].quality===ch.quality&&p[i-1]){p.push(p[i-1]);continue;}
-      if (i===0){const list=anchorsFrom(cands);const v=list[Math.min(pi,list.length-1)];p.push(v);passSet=v?.set.key;continue;}
+      if (i===0){const list=anchorsFrom(cands);const v=list[Math.min(pi,list.length-1)];p.push(v);win=centerOf(v);continue;}
       const prev=p[i-1];
       if (!prev){p.push(cands.find(v=>!hasOpenString(v.frets))||cands[0]);continue;}
-      const pool=multi&&passSet?cands.filter(v=>v.set.key===passSet):cands;
-      p.push(closestVoicing(pool.length?pool:cands,prev.frets));
+      if (multi){let best=null,bs=Infinity;for(const v of cands){const c=posCost(v,prev,win);if(c<bs){bs=c;best=v;}}p.push(best);}
+      else p.push(closestVoicing(cands,prev.frets));
     }
     return p;
   },[chords,candidatesFor,anchorsFrom,pins,multi,pi]);
 
-  const posSet=path[0]?.set||null;
   const posLabel=useMemo(()=>{
     const v=path[0]; if (!v||!chords.length) return '';
     const z=matchCAGEDZone(chords[0].root,chords[0].quality,v.frets);
@@ -472,7 +468,7 @@ export default function ProgressionPage() {
               </div>
               {positions.length>0&&(
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-gray-500 uppercase tracking-wide">Position <span className="normal-case text-gray-600">{positions.length>1?`${pi+1}/${positions.length} · `:''}{posSet&&<span className="font-semibold" style={{color:posSet.color}}>{posSet.label} · </span>}{posLabel}</span></span>
+                  <span className="text-xs text-gray-500 uppercase tracking-wide">Position <span className="normal-case text-gray-600">{positions.length>1?`${pi+1}/${positions.length} · `:''}{posLabel}</span></span>
                   <button onClick={()=>setPosIdx(Math.max(0,pi-1))} disabled={pi<=0} title="Move the whole progression lower on the neck" className="px-2.5 py-1 rounded text-xs font-medium bg-gray-800 text-gray-300 hover:bg-gray-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed">▼</button>
                   <button onClick={()=>setPosIdx(Math.min(positions.length-1,pi+1))} disabled={pi>=positions.length-1} title="Move the whole progression higher on the neck" className="px-2.5 py-1 rounded text-xs font-medium bg-gray-800 text-gray-300 hover:bg-gray-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed">▲</button>
                 </div>
@@ -576,7 +572,7 @@ export default function ProgressionPage() {
       )}
 
       <div className="mt-6 text-xs text-gray-600 border-t border-gray-800 pt-4">
-        <p><strong className="text-gray-500">How to use:</strong> Set chord quality, add chords, and the smoothest path is voice-led for you across the active <strong>string sets</strong> (toggle them, and use <strong>Position</strong> to move the whole path up or down the neck). With more than one set on, each neck <strong>Position</strong> sits on a single string set, and stepping Positions moves between the sets up and down the neck (each chord's card is colored by its set). Click any chord's <strong>Voicings</strong> to pin a specific shape (later chords re-lead from it; <strong>Auto</strong> unpins). Click <strong>Overlay</strong> to see the CAGED chord shape and pentatonic scale around any voicing. 7th chord voicings use shell voicings (root, 3rd/b3rd, 7th) — the 5th is omitted to fit 3 strings.</p>
+        <p><strong className="text-gray-500">How to use:</strong> Set chord quality, add chords, and the smoothest path is voice-led for you across the active <strong>string sets</strong> (toggle them, and use <strong>Position</strong> to move the whole path up or down the neck). With more than one set on, each chord takes the voicing that keeps your hand in the <strong>Position</strong> — so a single pass mixes 3-2-1 and 4-3-2 where the other set sits closer (each chord's card is colored by its set). Click any chord's <strong>Voicings</strong> to pin a specific shape (later chords re-lead from it; <strong>Auto</strong> unpins). Click <strong>Overlay</strong> to see the CAGED chord shape and pentatonic scale around any voicing. 7th chord voicings use shell voicings (root, 3rd/b3rd, 7th) — the 5th is omitted to fit 3 strings.</p>
       </div>
     </div>
     </div>

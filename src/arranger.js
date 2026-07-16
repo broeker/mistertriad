@@ -4,7 +4,7 @@
    No React — Player wraps buildSchedule in a memo and feeds the events to the
    audio scheduler. */
 
-import { QS, isMinorFamily, voicingKey } from './music.js';
+import { QS, isMinorFamily, hasOpenString, voicingKey } from './music.js';
 import { STRING_MIDI, voicingMidis } from './audio.js';
 import {
   METERS, STRUMS, GFILL_STRUMS, DRUM_PATTERNS, BASS_METERS,
@@ -27,11 +27,23 @@ export function leadPool(ch, voicing, strs) {
   return [...new Set(pool)].sort((a,b)=>a-b);
 }
 
-/* ---- String-set path helpers ---- */
+/* ---- String-set path engine ---- */
 // centerOf = the voicing's neck position (mean of lowest-fretted and highest
-// fret); used to order anchor positions. pinKeyOf identifies a pinned voicing.
+// fret); used to order anchor positions and as the pass's fret window.
 export const centerOf=v=>{const nz=v.frets.filter(f=>f>0);return nz.length?(Math.min(...nz)+Math.max(...v.frets))/2:0;};
 export const pinKeyOf=v=>v?`${v.set.key}:${voicingKey(v)}`:'';
+const pitchesOf=v=>v.set.strs.map((s,i)=>STRING_MIDI[s]+v.frets[i]);
+// Position-playing cost: distance from the pass's fret window (the neck
+// position) dominates, so each chord takes whichever set keeps the hand in the
+// box — crossing 3-2-1 ↔ 4-3-2 wherever the other set sits closer. A light
+// pitch-continuity term only breaks ties; there is NO set-change penalty, since
+// crossing sets to stay in position is exactly the point.
+export const posCost=(v,prev,win)=>{
+  const c=(win!=null?Math.abs(centerOf(v)-win)*3:0)+(hasOpenString(v.frets)?3:0);
+  const pa=[...pitchesOf(v)].sort((x,y)=>x-y),pb=[...pitchesOf(prev)].sort((x,y)=>x-y);
+  let d=0; for (let i=0;i<pa.length;i++) d+=Math.abs(pa[i]-pb[i]);
+  return c+d*0.1;
+};
 
 // Roll an articulation for a lead note: legato (hammer-on/pull-off) on close
 // offbeat steps, bends into strong beats, occasional double stop a third/fourth
