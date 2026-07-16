@@ -1,0 +1,255 @@
+{
+ "type": "pitched",
+ "notes": {
+  "40": {
+   "layers": [
+    [
+     "g40_p_rr1.mp3",
+     "g40_p_rr2.mp3"
+    ],
+    [
+     "g40_mf_rr1.mp3",
+     "g40_mf_rr2.mp3",
+     "g40_mf_rr3.mp3"
+    ],
+    [
+     "g40_f_rr1.mp3",
+     "g40_f_rr2.mp3",
+     "g40_f_rr3.mp3"
+    ]
+   ]
+  },
+  "43": {
+   "layers": [
+    [
+     "g43_p_rr1.mp3",
+     "g43_p_rr2.mp3"
+    ],
+    [
+     "g43_mf_rr1.mp3",
+     "g43_mf_rr2.mp3",
+     "g43_mf_rr3.mp3"
+    ],
+    [
+     "g43_f_rr1.mp3",
+     "g43_f_rr2.mp3",
+     "g43_f_rr3.mp3"
+    ]
+   ]
+  },
+  "46": {
+   "layers": [
+    [
+     "g46_p_rr1.mp3",
+     "g46_p_rr2.mp3"
+    ],
+    [
+     "g46_mf_rr1.mp3",
+     "g46_mf_rr2.mp3",
+     "g46_mf_rr3.mp3"
+    ],
+    [
+     "g46_f_rr1.mp3",
+     "g46_f_rr2.mp3",
+     "g46_f_rr3.mp3"
+    ]
+   ]
+  },
+  "49": {
+   "layers": [
+    [
+     "g49_p_rr1.mp3",
+     "g49_p_rr2.mp3"
+    ],
+    [
+     "g49_mf_rr1.mp3",
+     "g49_mf_rr2.mp3",
+     "g49_mf_rr3.mp3"
+    ],
+    [
+     "g49_f_rr1.mp3",
+     "g49_f_rr2.mp3",
+     "g49_f_rr3.mp3"
+    ]
+   ]
+  },
+  "52": {
+   "layers": [
+    [
+     "g52_p_rr1.mp3",
+     "g52_p_rr2.mp3"
+    ],
+    [
+     "g52_mf_rr1.mp3",
+     "g52_mf_rr2.mp3",
+     "g52_mf_rr3.mp3"
+    ],
+    [
+     "g52_f_rr1.mp3",
+     "g52_f_rr2.mp3",
+     "g52_f_rr3.mp3"
+    ]
+   ]
+  },
+  "55": {
+   "layers": [
+    [
+     "g55_p_rr1.mp3",
+     "g55_p_rr2.mp3"
+    ],
+    [
+     "g55_mf_rr1.mp3",
+     "g55_mf_rr2.mp3",
+     "g55_mf_rr3.mp3"
+    ],
+    [
+     "g55_f_rr1.mp3",
+     "g55_f_rr2.mp3",
+     "g55_f_rr3.mp3"
+    ]
+   ]
+  },
+  "58": {
+   "layers": [
+    [
+     "g58_p_rr1.mp3",
+     "g58_p_rr2.mp3"
+    ],
+    [
+     "g58_mf_rr1.mp3",
+     "g58_mf_rr2.mp3",
+     "g58_mf_rr3.mp3"
+    ],
+    [
+     "g58_f_rr1.mp3",
+     "g58_f_rr2.mp3",
+     "g58_f_rr3.mp3"
+    ]
+   ]
+  },
+  "61": {
+   "layers": [
+    [
+     "g61_p_rr1.mp3",
+     "g61_p_rr2.mp3"
+    ],
+    [
+     "g61_mf_rr1.mp3",
+     "g61_mf_rr2.mp3",
+     "g61_mf_rr3.mp3"
+    ],
+    [
+     "g61_f_rr1.mp3",
+     "g61_f_rr2.mp3",
+     "g61_f_rr3.mp3"
+    ]
+   ]
+  },
+  "64": {
+   "layers": [
+    [
+     "g64_p_rr1.mp3",
+     "g64_p_rr2.mp3"
+    ],
+    [
+     "g64_mf_rr1.mp3",
+     "g64_mf_rr2.mp3",
+     "g64_mf_rr3.mp3"
+    ],
+    [
+     "g64_f_rr1.mp3",
+     "g64_f_rr2.mp3",
+     "g64_f_rr3.mp3"
+    ]
+   ]
+  },
+  "67": {
+   "layers": [
+    [
+     "g67_p_rr1.mp3",
+     "g67_p_rr2.mp3"
+    ],
+    [
+     "g67_mf_rr1.mp3",
+     "g67_mf_rr2.mp3",
+     "g67_mf_rr3.mp3"
+    ],
+    [
+     "g67_f_rr1.mp3",
+     "g67_f_rr2.mp3",
+     "g67_f_rr3.mp3"
+    ]
+   ]
+  },
+  "70": {
+   "layers": [
+    [
+     "g70_p_rr1.mp3",
+     "g70_p_rr2.mp3"
+    ],
+    [
+     "g70_mf_rr1.mp3",
+     "g70_mf_rr2.mp3",
+     "g70_mf_rr3.mp3"
+    ],
+    [
+     "g70_f_rr1.mp3",
+     "g70_f_rr2.mp3",
+     "g70_f_rr3.mp3"
+    ]
+   ]
+  },
+  "73": {
+   "layers": [
+    [
+     "g73_p_rr1.mp3",
+     "g73_p_rr2.mp3"
+    ],
+    [
+     "g73_mf_rr1.mp3",
+     "g73_mf_rr2.mp3",
+     "g73_mf_rr3.mp3"
+    ],
+    [
+     "g73_f_rr1.mp3",
+     "g73_f_rr2.mp3",
+     "g73_f_rr3.mp3"
+    ]
+   ]
+  },
+  "76": {
+   "layers": [
+    [
+     "g76_p_rr1.mp3",
+     "g76_p_rr2.mp3"
+    ],
+    [
+     "g76_mf_rr1.mp3",
+     "g76_mf_rr2.mp3",
+     "g76_mf_rr3.mp3"
+    ],
+    [
+     "g76_f_rr1.mp3",
+     "g76_f_rr2.mp3",
+     "g76_f_rr3.mp3"
+    ]
+   ]
+  },
+  "79": {
+   "layers": [
+    [
+     "g79_p_rr1.mp3",
+     "g79_p_rr2.mp3"
+    ],
+    [
+     "g79_mf_rr1.mp3",
+     "g79_mf_rr2.mp3"
+    ],
+    [
+     "g79_f_rr1.mp3",
+     "g79_f_rr2.mp3"
+    ]
+   ]
+  }
+ }
+}

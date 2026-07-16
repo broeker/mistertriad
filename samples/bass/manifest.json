@@ -1,0 +1,133 @@
+{
+ "type": "pitched",
+ "notes": {
+  "27": {
+   "layers": [
+    [
+     "eb1_vl2_rr1.mp3",
+     "eb1_vl2_rr2.mp3",
+     "eb1_vl2_rr3.mp3",
+     "eb1_vl2_rr4.mp3"
+    ],
+    [
+     "eb1_vl3_rr1.mp3",
+     "eb1_vl3_rr2.mp3",
+     "eb1_vl3_rr3.mp3",
+     "eb1_vl3_rr4.mp3"
+    ]
+   ]
+  },
+  "30": {
+   "layers": [
+    [
+     "gb1_vl2_rr1.mp3",
+     "gb1_vl2_rr2.mp3",
+     "gb1_vl2_rr3.mp3",
+     "gb1_vl2_rr4.mp3"
+    ],
+    [
+     "gb1_vl3_rr1.mp3",
+     "gb1_vl3_rr2.mp3",
+     "gb1_vl3_rr3.mp3",
+     "gb1_vl3_rr4.mp3"
+    ]
+   ]
+  },
+  "33": {
+   "layers": [
+    [
+     "a1_vl2_rr1.mp3",
+     "a1_vl2_rr2.mp3",
+     "a1_vl2_rr3.mp3",
+     "a1_vl2_rr4.mp3"
+    ],
+    [
+     "a1_vl3_rr1.mp3",
+     "a1_vl3_rr2.mp3",
+     "a1_vl3_rr3.mp3",
+     "a1_vl3_rr4.mp3"
+    ]
+   ]
+  },
+  "36": {
+   "layers": [
+    [
+     "c2_vl2_rr1.mp3",
+     "c2_vl2_rr2.mp3",
+     "c2_vl2_rr3.mp3",
+     "c2_vl2_rr4.mp3"
+    ],
+    [
+     "c2_vl3_rr1.mp3",
+     "c2_vl3_rr2.mp3",
+     "c2_vl3_rr3.mp3",
+     "c2_vl3_rr4.mp3"
+    ]
+   ]
+  },
+  "39": {
+   "layers": [
+    [
+     "eb2_vl2_rr1.mp3",
+     "eb2_vl2_rr2.mp3",
+     "eb2_vl2_rr3.mp3",
+     "eb2_vl2_rr4.mp3"
+    ],
+    [
+     "eb2_vl3_rr1.mp3",
+     "eb2_vl3_rr2.mp3",
+     "eb2_vl3_rr3.mp3",
+     "eb2_vl3_rr4.mp3"
+    ]
+   ]
+  },
+  "42": {
+   "layers": [
+    [
+     "gb2_vl2_rr1.mp3",
+     "gb2_vl2_rr2.mp3",
+     "gb2_vl2_rr3.mp3",
+     "gb2_vl2_rr4.mp3"
+    ],
+    [
+     "gb2_vl3_rr1.mp3",
+     "gb2_vl3_rr2.mp3",
+     "gb2_vl3_rr3.mp3",
+     "gb2_vl3_rr4.mp3"
+    ]
+   ]
+  },
+  "45": {
+   "layers": [
+    [
+     "a2_vl2_rr1.mp3",
+     "a2_vl2_rr2.mp3",
+     "a2_vl2_rr3.mp3",
+     "a2_vl2_rr4.mp3"
+    ],
+    [
+     "a2_vl3_rr1.mp3",
+     "a2_vl3_rr2.mp3",
+     "a2_vl3_rr3.mp3",
+     "a2_vl3_rr4.mp3"
+    ]
+   ]
+  },
+  "48": {
+   "layers": [
+    [
+     "c3_vl2_rr1.mp3",
+     "c3_vl2_rr2.mp3",
+     "c3_vl2_rr3.mp3",
+     "c3_vl2_rr4.mp3"
+    ],
+    [
+     "c3_vl3_rr1.mp3",
+     "c3_vl3_rr2.mp3",
+     "c3_vl3_rr3.mp3",
+     "c3_vl3_rr4.mp3"
+    ]
+   ]
+  }
+ }
+}
