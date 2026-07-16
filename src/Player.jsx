@@ -514,7 +514,7 @@ export default function Player() {
   const save=()=>{
     const name=saveName.trim();
     if (!name) return;
-    const entry={name,key,meter,tempo,sections,arrangement,pins,feel,strum,drums,drumFills,bassMode,bassFills,guitarFills,backup,lead,leadEvery,keys,genre};
+    const entry={name,key,meter,tempo,sections,arrangement,pins,rolls,selectedSets,feel,strum,drums,drumFills,bassMode,bassFills,guitarFills,backup,lead,leadEvery,keys,genre};
     setSaved([...saved.filter(s=>s.name!==name),entry]);
   };
   const loadEntry=s=>{
@@ -528,7 +528,10 @@ export default function Player() {
       setSections({A:s.bars,B:[],C:[]});
       setArrangement(['A']);
     }
-    setActiveSec('A'); setPins(s.pins||{}); setRolls({}); setPosIdx(0);
+    setActiveSec('A'); setPins(s.pins||{}); setRolls(s.rolls||{}); setPosIdx(0);
+    // Restore the string sets the roll was made with, so its voicings resolve.
+    if (Array.isArray(s.selectedSets)&&s.selectedSets.some(k=>STRING_SETS.some(x=>x.key===k)))
+      setSelectedSets(STRING_SETS.filter(x=>s.selectedSets.includes(x.key)).map(x=>x.key));
     setStrum(s.strum&&STRUMS[s.strum]?.p[m]?s.strum:'folk');
     setDrums(s.drums&&s.drums!=='off'?(DRUM_PATTERNS[s.drums]?.[m]?s.drums:'kit'):'off');
     setDrumFills(!!s.drumFills);
