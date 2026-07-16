@@ -1494,7 +1494,7 @@ export default function Player() {
           </div>
           )}
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
           {bars.map((bar,i)=>{
             const fi=dispStart+i;
             const ch=chords[fi];
@@ -1503,7 +1503,7 @@ export default function Player() {
             const isPick=pickIdx===i;
             return (
               <div key={i} onClick={()=>{ if (view==='triads') { setPickIdx(isPick?null:i); setEditIdx(null); } else setEditIdx(isEdit?null:i); }}
-                   className={`relative cursor-pointer rounded-lg border px-2 pt-1.5 pb-2 flex flex-col items-center transition-all min-w-[110px] ${isCur?'border-amber-500 bg-amber-500/10':isEdit||isPick?'border-emerald-500 bg-emerald-500/10':'border-gray-800 bg-gray-950 hover:border-gray-600'}`}>
+                   className={`relative cursor-pointer rounded-lg border px-2 pt-1.5 pb-2 flex flex-col items-center transition-all ${isCur?'border-amber-500 bg-amber-500/10':isEdit||isPick?'border-emerald-500 bg-emerald-500/10':'border-gray-800 bg-gray-950 hover:border-gray-600'}`}>
                 <div className="text-[10px] text-gray-600 self-start">bar {i+1}{view==='triads'&&multi&&triadPath[fi]&&<span className="font-semibold" style={{color:triadPath[fi].set.color}}> · {triadPath[fi].set.label}</span>}{barPinVal(i)!=null&&<span className="text-emerald-500"> · pinned</span>}</div>
                 <div className="text-sm font-bold text-amber-400">{ch.name} <span className="text-gray-500 font-normal text-xs">({ch.numeral})</span></div>
                 {view==='cowboy'
@@ -1559,14 +1559,14 @@ export default function Player() {
             );
           })}
           {view==='triads'&&upNext?.path[0]&&(
-            <div className={`rounded-lg border border-dashed px-2 pt-1.5 pb-2 flex flex-col items-center min-w-[110px] transition-all ${climbPulse?'border-amber-400 ring-1 ring-amber-400/70 animate-pulse':'border-gray-600'}`}>
+            <div className={`rounded-lg border border-dashed px-2 pt-1.5 pb-2 flex flex-col items-center transition-all ${climbPulse?'border-amber-400 ring-1 ring-amber-400/70 animate-pulse':'border-gray-600'}`}>
               <div className="text-[10px] text-amber-400/90 self-start">next loop · {posMode==='vary'?<span className="font-semibold" style={{color:upNext.path[0].set.color}}>{upNext.path[0].set.label}</span>:`pos ${upNext.anchor+1}`} · {fretWindow(upNext.path[0])}</div>
               <div className="text-sm font-bold text-amber-400">{chords[0].name} <span className="text-gray-500 font-normal text-xs">({chords[0].numeral})</span></div>
               <FretDiag voicing={upNext.path[0]} strs={upNext.path[0].set.strs} name={null} root={chords[0].root} size="small" accent={upNext.path[0].set.color}/>
             </div>
           )}
           {!bars.length&&(
-            <div className="text-sm text-gray-500 self-center px-2 flex items-center gap-3 flex-wrap">
+            <div className="col-span-full text-sm text-gray-500 self-center px-2 flex items-center gap-3 flex-wrap">
               <span className="italic">Empty {SECTION_LABELS[activeSec].toLowerCase()} — add bars with +, or pick an iconic progression above to fill it.</span>
               {activeSec!=='A'&&SECTION_IDEAS[genre]&&(
                 <button onClick={()=>setSuggestOpen(o=>!o)}
@@ -1576,7 +1576,7 @@ export default function Player() {
               )}
             </div>
           )}
-          <button onClick={addBar} className="rounded-lg border border-dashed border-gray-700 text-gray-500 hover:text-gray-300 hover:border-gray-500 px-4 min-w-[60px] text-2xl transition-all" title="Add bar">+</button>
+          <button onClick={addBar} className="rounded-lg border border-dashed border-gray-700 text-gray-500 hover:text-gray-300 hover:border-gray-500 text-3xl flex items-center justify-center min-h-[72px] transition-all" title="Add bar">+</button>
         </div>
 
         {!bars.length&&suggestOpen&&activeSec!=='A'&&SECTION_IDEAS[genre]&&(()=>{
