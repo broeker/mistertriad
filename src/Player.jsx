@@ -657,31 +657,31 @@ export default function Player() {
       </div>
 
       <div className="mb-4 bg-gray-900/50 rounded-xl border border-gray-800">
-        <button onClick={()=>setBandOpen(o=>!o)} className="w-full flex items-center gap-3 px-4 py-2.5 text-left">
+        <div className="px-4 pt-2.5 pb-2 flex flex-wrap items-center gap-x-4 gap-y-2">
           <span className="text-xs text-gray-500 uppercase tracking-wide font-bold">Band</span>
-          {!bandOpen&&<span className="text-xs text-gray-600 truncate">{[METERS[meter].label,feel==='shuffle'?'shuffle':'straight',STRUMS[strum].label.toLowerCase(),drums==='off'?null:`drums: ${drums}`,bassMode==='off'?null:`bass: ${bassMode}`,backup==='off'?null:`banjo: ${backup}`,keys==='off'?null:'keys',lead==='off'?null:`lead: ${lead}`].filter(Boolean).join(' · ')}</span>}
-          <span className="ml-auto text-xs text-gray-500">{bandOpen?'▲':'▼'}</span>
-        </button>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-500 uppercase tracking-wide">Time</span>
+            {METER_KEYS.map(k=>(
+              <button key={k} onClick={()=>applyMeter(k)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${meter===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{METERS[k].label}</button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-500 uppercase tracking-wide">Feel</span>
+            {[['straight','Straight'],['shuffle','Shuffle']].map(([k,l])=>{
+              const off=k==='shuffle'&&!METERS[meter].swing; // compound meters already swing
+              return (
+                <button key={k} onClick={()=>setFeel(k)} disabled={off} title={off?`${meter} is already triplet-based`:undefined}
+                  className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${feel===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'} disabled:opacity-40 disabled:cursor-not-allowed`}>{l}</button>
+              );
+            })}
+          </div>
+          <button onClick={()=>setBandOpen(o=>!o)} className="ml-auto flex items-center gap-2 text-xs text-gray-500 hover:text-gray-300 transition-colors">
+            {!bandOpen&&<span className="text-gray-600 truncate max-w-[38vw] hidden sm:inline">{[STRUMS[strum].label.toLowerCase(),drums==='off'?null:`drums: ${drums}`,bassMode==='off'?null:`bass: ${bassMode}`,backup==='off'?null:`banjo: ${backup}`,keys==='off'?null:'keys',lead==='off'?null:`lead: ${lead}`].filter(Boolean).join(' · ')}</span>}
+            <span className="whitespace-nowrap">{bandOpen?'Less ▲':'More ▼'}</span>
+          </button>
+        </div>
         {bandOpen&&(
         <div className="px-4 pb-3 flex flex-col gap-2.5">
-        <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-gray-500 uppercase tracking-wide">Time</span>
-          {METER_KEYS.map(k=>(
-            <button key={k} onClick={()=>applyMeter(k)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${meter===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{METERS[k].label}</button>
-          ))}
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-gray-500 uppercase tracking-wide">Feel</span>
-          {[['straight','Straight'],['shuffle','Shuffle']].map(([k,l])=>{
-            const off=k==='shuffle'&&!METERS[meter].swing; // compound meters already swing
-            return (
-              <button key={k} onClick={()=>setFeel(k)} disabled={off} title={off?`${meter} is already triplet-based`:undefined}
-                className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${feel===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'} disabled:opacity-40 disabled:cursor-not-allowed`}>{l}</button>
-            );
-          })}
-        </div>
-        </div>
         <div className="rounded-lg border border-gray-800 p-2 flex flex-col gap-2">
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-gray-500 uppercase tracking-wide">Guitar</span>
