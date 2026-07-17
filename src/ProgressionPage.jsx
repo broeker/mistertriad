@@ -6,6 +6,7 @@ import {
 import FretDiag, { NoteList } from './FretDiag.jsx';
 import { fretWindow } from './fretboard.js';
 import { centerOf, posCost, pinKeyOf } from './arranger.js';
+import { numeralOf } from './styles.js';
 import { strum, voicingMidis } from './audio.js';
 
 // Default active string sets (5-4-3 and 6-5-4 off by default, but selectable).
@@ -286,7 +287,7 @@ export default function ProgressionPage() {
 
   const chords=useMemo(()=>prog.map(p=>{
     const root=(key+SCALE[p.deg])%12,nts=QS[p.q].iv.map(iv=>(root+iv)%12);
-    return {notes:nts,root,name:NOTES[root]+QS[p.q].s,numeral:p.numeral,quality:p.q};
+    return {notes:nts,root,name:NOTES[root]+QS[p.q].s,numeral:numeralOf(p),quality:p.q};
   }),[key,prog]);
 
   // More than one set active → cross-set voice-leading: each chord takes the
@@ -373,7 +374,7 @@ export default function ProgressionPage() {
     return computeOverlay(ch.root,ch.quality,path[overlayIdx],path[overlayIdx].set.strs);
   },[overlayIdx,chords,path]);
 
-  const addChord=deg=>{const d=DEGS[deg];setProg(p=>{if(p.length>=1)setShownSecondHelper(true);return[...p,{deg:d.i,q:selectedQuality,numeral:d.n}];});};
+  const addChord=deg=>{const d=DEGS[deg];setProg(p=>{if(p.length>=1)setShownSecondHelper(true);return[...p,{deg:d.i,q:selectedQuality}];});};
   // Re-home pins across a bar removal (indices shift); drop the removed bar's pin.
   const removeChord=idx=>{
     setProg(p=>p.filter((_,i)=>i!==idx));
