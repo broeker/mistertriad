@@ -423,7 +423,9 @@ export const SECTION_IDEAS={
 
 export function chordOf(bar,key) {
   const root=(key+SCALE[bar.deg])%12;
-  return { root, quality:bar.q, name:NOTES[root]+QS[bar.q].s, numeral:DEGS[bar.deg].n+(bar.q==='7'?'7':'') };
+  // numeralOf cases the numeral by the chord's actual quality (dominant 7 → VI7,
+  // not vi7), so secondary dominants and borrowed chords read correctly.
+  return { root, quality:bar.q, name:NOTES[root]+QS[bar.q].s, numeral:numeralOf(bar) };
 }
 
 // Genre-idiomatic turnarounds: the last TURNAROUND_LEN bars a progression swaps
