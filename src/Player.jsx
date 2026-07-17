@@ -11,6 +11,7 @@ import {
   METERS, METER_KEYS, STRUMS, GFILL_STRUMS, DRUM_PATTERNS, BASS_METERS,
   GENRE_GROUPS, GENRES, DEFAULT_SETS, SECTION_IDS, SECTION_LABELS, SECTION_IDEAS,
   chordOf, DEFAULT_GENRE, DEFAULT_PROG, DEFAULT_SET,
+  TURNAROUND, TURNAROUND_LEN, canTurnaround,
 } from './styles.js';
 import { buildSchedule as buildScheduleFn, centerOf, posCost, pinKeyOf } from './arranger.js';
 import { usePersistentState } from './hooks.js';
@@ -129,6 +130,7 @@ export default function Player() {
   const [livePass,setLivePass]=useState(0);
   const [pins,setPins]=useState({});
   const [rolls,setRolls]=useState({}); // Randomize picks, keyed sec:bar:position (ephemeral; a manual pin overrides)
+  const [taSecs,setTaSecs]=useState({}); // {sec: stashed original tail} — presence = turnaround applied to that section
   // More than one set active → cross-set voice-leading: each chord takes the
   // voicing that keeps the hand in the position, crossing sets where it fits
   // (posCost). A single set is just the closestVoicing path.
@@ -347,7 +349,7 @@ export default function Player() {
     const first=PROGRESSIONS[g.key][0];
     setSections({A:toBars(first.bars),B:[],C:[]});
     setArrangement(['A']); setActiveSec('A');
-    setEditIdx(null); setPickIdx(null); setMoreOpen(false); setPins({}); setRolls({}); setPosIdx(0); setPosSel([]);
+    setEditIdx(null); setPickIdx(null); setMoreOpen(false); setPins({}); setRolls({}); setTaSecs({}); setPosIdx(0); setPosSel([]);
     applySetOverrides(first,g);
   };
 
@@ -363,7 +365,7 @@ export default function Player() {
   const createNew=()=>{
     setSections({A:[{deg:0,q:'maj'}],B:[],C:[]});
     setArrangement(['A']); setActiveSec('A');
-    setEditIdx(0); setPickIdx(null); setMoreOpen(false); setPins({}); setRolls({}); setPosIdx(0); setPosSel([]);
+    setEditIdx(0); setPickIdx(null); setMoreOpen(false); setPins({}); setRolls({}); setTaSecs({}); setPosIdx(0); setPosSel([]);
   };
 
   // The full loop as a flat event list — a pure function of the current settings.
@@ -471,7 +473,7 @@ export default function Player() {
   const applyIdea=p=>{
     setSectionBars(activeSec,toBars(p.bars));
     setPins(ps=>Object.fromEntries(Object.entries(ps).filter(([k])=>!k.startsWith(activeSec+':'))));
-    setRolls({}); setSuggestOpen(false); setPosIdx(0); setPosSel([]);
+    setRolls({}); setTaSecs({}); setSuggestOpen(false); setPosIdx(0); setPosSel([]);
   };
 
   // Fills the active section (build a chorus by switching tabs and picking again).
@@ -479,13 +481,13 @@ export default function Player() {
     setSectionBars(activeSec,toBars(p.bars));
     setEditIdx(null); setPickIdx(null); setMoreOpen(false); setPosIdx(0); setPosSel([]);
     setPins(ps=>Object.fromEntries(Object.entries(ps).filter(([k])=>!k.startsWith(activeSec+':'))));
-    setRolls({}); applySetOverrides(p);
+    setRolls({}); setTaSecs({}); applySetOverrides(p);
   };
   // Pins are keyed "section:barIndex" or "section:barIndex:position"; structural
   // edits re-home the active section's pins (preserving any position suffix) and
   // leave other sections' alone.
   const remapPins=fn=>{
-    setRolls({}); // a bar edit invalidates the current roll
+    setRolls({}); setTaSecs({}); // a bar edit invalidates the current roll
     setPins(ps=>{
       const n={};
       for (const [k,v] of Object.entries(ps)) {
@@ -511,6 +513,26 @@ export default function Player() {
   };
   const addBar=()=>setBars(bs=>[...bs,bs.length?{...bs[bs.length-1]}:{deg:0,q:'maj'}]);
 
+  // Turnaround toggle (active section): swap the last TURNAROUND_LEN bars for the
+  // genre's turnaround (stashing the originals so the toggle reverses cleanly).
+  const taOn=!!taSecs[activeSec];
+  const taAvailable=taOn||canTurnaround(bars);
+  const toggleTurnaround=()=>{
+    const sec=activeSec, n=TURNAROUND_LEN;
+    if (taSecs[sec]) { // off — restore the stashed tail
+      const tail=taSecs[sec];
+      setSectionBars(sec,bs=>[...bs.slice(0,-n),...tail]);
+      setTaSecs(prev=>{const x={...prev};delete x[sec];return x;});
+    } else { // on — replace the resolving tail with the turnaround
+      if (!canTurnaround(bars)) return;
+      const ta=TURNAROUND[genre]||TURNAROUND.oldtime;
+      setTaSecs(prev=>({...prev,[sec]:bars.slice(-n)}));
+      setSectionBars(sec,bs=>[...bs.slice(0,-n),...toBars(ta)]);
+    }
+    setPins(p=>Object.fromEntries(Object.entries(p).filter(([k])=>!k.startsWith(sec+':'))));
+    setRolls({});
+  };
+
   const save=()=>{
     const name=saveName.trim();
     if (!name) return;
@@ -528,7 +550,7 @@ export default function Player() {
       setSections({A:s.bars,B:[],C:[]});
       setArrangement(['A']);
     }
-    setActiveSec('A'); setPins(s.pins||{}); setRolls(s.rolls||{}); setPosIdx(0);
+    setActiveSec('A'); setPins(s.pins||{}); setRolls(s.rolls||{}); setTaSecs({}); setPosIdx(0);
     // Restore the string sets the roll was made with, so its voicings resolve.
     if (Array.isArray(s.selectedSets)&&s.selectedSets.some(k=>STRING_SETS.some(x=>x.key===k)))
       setSelectedSets(STRING_SETS.filter(x=>s.selectedSets.includes(x.key)).map(x=>x.key));
@@ -847,6 +869,9 @@ export default function Player() {
               <button key={k} onClick={()=>setView(k)} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${view===k?'bg-amber-500 text-gray-900':'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{l}</button>
             ))}
           </div>
+          <button onClick={toggleTurnaround} disabled={!taAvailable}
+            title={taAvailable?'Swap the ending for a turnaround that pulls back to the top':'Turnaround needs a tune that resolves home (ends on I)'}
+            className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${taOn?'bg-amber-500 text-gray-900 border-amber-400':'border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-500'} disabled:opacity-40 disabled:cursor-not-allowed`}>↩ Turnaround</button>
           {view==='triads'&&(
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-gray-500 uppercase tracking-wide">Strings</span>
@@ -1050,7 +1075,7 @@ export default function Player() {
 
       <details className="mt-6 text-xs text-gray-600 border-t border-gray-800 pt-4">
         <summary className="cursor-pointer text-gray-500 font-bold hover:text-gray-300 select-none">How to use &amp; credits</summary>
-        <p className="mt-2">Pick a genre tab (it starts you on that genre's first style and progression), then a style, then one of its iconic progressions — or click any bar to edit its chord, and + to add bars. Songs can have up to three <strong>sections</strong> (Verse/Chorus/Bridge tabs above the bars): switch to an empty tab and pick a progression (or add bars) to fill it, then build the <strong>Arrangement</strong> with the + chips — playback runs the whole arrangement as one loop, voice-leading flows across section boundaries, and the sounding section's chip lights up. Saved progressions keep their sections, arrangement, and pinned voicings. Switching style loads that style's first progression along with its sound — pick another from the list (<strong>More…</strong> opens the genre's full catalog with numerals and bar counts) or edit the bars from there. Cowboy chords shows the simplest first-position grip for each bar; Triads shows a voice-led triad path on your chosen string set — or, with more than one set on, each chord takes the voicing that keeps the hand in the position, so a single pass mixes 3-2-1 and 4-3-2 where it fits (each bar's card names its set). <strong>Position</strong> controls where the path sits on the neck. <strong>Loop the neck</strong> (the default) plays the progression once per position, climbing up and back down, changing exactly on the loop boundary — the diagrams and the counter follow along, so you can ride the whole neck hands-free; the numbered chips choose which positions the climb visits (e.g. just 1–2 while you're learning the low half). While climbing, a dashed "next loop" card at the end of the grid shows where bar 1 lands on the next pass, pulsing through the final bar — that's your cue for where the hand goes. <strong>Manual</strong> parks it in one position with ▼/▲ steppers. <strong>Vary</strong> shuffles through the neck positions — each loop jumps to a different one instead of climbing in order — with the "next loop" card announcing where it's headed. In every mode the improvised Lead follows the position, since its notes come from each bar's voicing. To bend the path at one spot, click a bar and pick a <strong>Voicing</strong>: that bar is pinned (marked on its card) and later bars re-lead from it; Auto unpins. Everything is live while it plays — tempo, key, band, even switching progressions — playback carries on from the same beat. The <strong>View</strong> and the <strong>Guitar</strong> sound are independent, and you can switch views while it plays: watch the triads while the guitar strums cowboy chords to follow along, set Guitar to Triads to hear what the triads should sound like, or mute it and play the triads yourself over the rhythm section. A <strong>Style</strong> button sets time signature, tempo, feel, strum pattern, and the band in one tap — every knob stays individually adjustable after. <strong>Time</strong> switches the meter by hand: 4/4, 3/4 (waltz), or 6/8 (compound — two pulses of three, the slow-blues feel). Strums, drums, and bass lines are written per meter, so the rows only show patterns that exist in the current one; switching meter pulls any knob that doesn't fit back to one that does (strum to Folk, drums to Kit, bass to Root–5th). Shuffle is disabled in 6/8 since the meter is already triplet-based. Some progressions also pin part of the band to fit their character (Cabbage locks in the driving boom-chick and alternating bass); knobs a progression doesn't pin keep your current settings. Strums: Folk is D-DU-UDU; Boom-chick picks the bass note on 1 and 3 and strums the top strings on 2 and 4 (old-time rhythm guitar); Bluegrass adds upstroke fills to the boom-chick; Lo-fi is sparse and lazy (it doubles as jazz comping); Pop is driving eighths; Travis fakes fingerpicking — thumb bass on every beat, soft finger picks between; Bossa is the syncopated bossa comp; Funk is scratchy off-beat sixteenths. Drums: Stomp (foot-tap), Kit (kick/snare/hats), Train (brushes with a backbeat), Bossa (rim clicks over hats), Swing (ride pattern with feathered kick — pair with Shuffle), Funk (syncopated kick, ghost snares); the Fills toggle throws a snare/tom run into every 4th bar, different each time Play builds the loop. <strong>Backup</strong> adds a second rhythm instrument over the guitar — a banjo, for now: Roll arpeggiates each bar's chord in three-finger-style eighth-note rolls (bluegrass turns it on by default), Chop plays short muted backbeat stabs (the mandolin-chop feel); it has its own Mixer strip. Keys adds an upright piano comping block chords on each bar; its Fills toggle also sprinkles a chord-tone run into every 4th bar, new each time Play builds the loop. Bass patterns: Root, Root–5th, Walking (with chromatic approaches), Boogie (the swung R-3-5-6 shuffle line), Bossa (dotted root–fifth), or Funk (syncopated with octave pops); on Root and Root–5th a <strong>Fills</strong> toggle walks up (or down) into the next chord whenever it changes — the country move that livens the simple patterns without full-time Walking — played on an upright or an electric (the Mixer's bass Samples switch; Pop, Indie Pop, and Funk preset the electric). The Mixer's guitar Samples switch likewise offers three acoustics and two electrics (E.Jazz hollowbody-ish, E.Muted for funk scratch). Shuffle swings the offbeat strums and hats onto the triplet grid (the blues preset selects it automatically). Lead improvises pentatonic notes drawn from each bar's triad position on the selected string set — Fills plays a run into every Nth bar (the /8 /4 /2 chips set how often), Solo noodles throughout; each press of Play writes a new solo, and it loops as played. The lead also rolls guitar articulations as it goes: bends into strong beats and fill endings, hammer-on/pull-off legato on quick close steps, and the occasional double stop. Saved progressions live in your browser.</p>
+        <p className="mt-2">Pick a genre tab (it starts you on that genre's first style and progression), then a style, then one of its iconic progressions — or click any bar to edit its chord, and + to add bars. Songs can have up to three <strong>sections</strong> (Verse/Chorus/Bridge tabs above the bars): switch to an empty tab and pick a progression (or add bars) to fill it, then build the <strong>Arrangement</strong> with the + chips — playback runs the whole arrangement as one loop, voice-leading flows across section boundaries, and the sounding section's chip lights up. Saved progressions keep their sections, arrangement, and pinned voicings. Switching style loads that style's first progression along with its sound — pick another from the list (<strong>More…</strong> opens the genre's full catalog with numerals and bar counts) or edit the bars from there. The <strong>Turnaround</strong> toggle swaps a tune's ending for a genre-idiomatic turnaround that pulls back to the top (the ragtime VI7–II7–V7 in country/blues/folk, a vi7–ii7–V7 in jazz) — available whenever the progression resolves home (ends on I). Cowboy chords shows the simplest first-position grip for each bar; Triads shows a voice-led triad path on your chosen string set — or, with more than one set on, each chord takes the voicing that keeps the hand in the position, so a single pass mixes 3-2-1 and 4-3-2 where it fits (each bar's card names its set). <strong>Position</strong> controls where the path sits on the neck. <strong>Loop the neck</strong> (the default) plays the progression once per position, climbing up and back down, changing exactly on the loop boundary — the diagrams and the counter follow along, so you can ride the whole neck hands-free; the numbered chips choose which positions the climb visits (e.g. just 1–2 while you're learning the low half). While climbing, a dashed "next loop" card at the end of the grid shows where bar 1 lands on the next pass, pulsing through the final bar — that's your cue for where the hand goes. <strong>Manual</strong> parks it in one position with ▼/▲ steppers. <strong>Vary</strong> shuffles through the neck positions — each loop jumps to a different one instead of climbing in order — with the "next loop" card announcing where it's headed. In every mode the improvised Lead follows the position, since its notes come from each bar's voicing. To bend the path at one spot, click a bar and pick a <strong>Voicing</strong>: that bar is pinned (marked on its card) and later bars re-lead from it; Auto unpins. Everything is live while it plays — tempo, key, band, even switching progressions — playback carries on from the same beat. The <strong>View</strong> and the <strong>Guitar</strong> sound are independent, and you can switch views while it plays: watch the triads while the guitar strums cowboy chords to follow along, set Guitar to Triads to hear what the triads should sound like, or mute it and play the triads yourself over the rhythm section. A <strong>Style</strong> button sets time signature, tempo, feel, strum pattern, and the band in one tap — every knob stays individually adjustable after. <strong>Time</strong> switches the meter by hand: 4/4, 3/4 (waltz), or 6/8 (compound — two pulses of three, the slow-blues feel). Strums, drums, and bass lines are written per meter, so the rows only show patterns that exist in the current one; switching meter pulls any knob that doesn't fit back to one that does (strum to Folk, drums to Kit, bass to Root–5th). Shuffle is disabled in 6/8 since the meter is already triplet-based. Some progressions also pin part of the band to fit their character (Cabbage locks in the driving boom-chick and alternating bass); knobs a progression doesn't pin keep your current settings. Strums: Folk is D-DU-UDU; Boom-chick picks the bass note on 1 and 3 and strums the top strings on 2 and 4 (old-time rhythm guitar); Bluegrass adds upstroke fills to the boom-chick; Lo-fi is sparse and lazy (it doubles as jazz comping); Pop is driving eighths; Travis fakes fingerpicking — thumb bass on every beat, soft finger picks between; Bossa is the syncopated bossa comp; Funk is scratchy off-beat sixteenths. Drums: Stomp (foot-tap), Kit (kick/snare/hats), Train (brushes with a backbeat), Bossa (rim clicks over hats), Swing (ride pattern with feathered kick — pair with Shuffle), Funk (syncopated kick, ghost snares); the Fills toggle throws a snare/tom run into every 4th bar, different each time Play builds the loop. <strong>Backup</strong> adds a second rhythm instrument over the guitar — a banjo, for now: Roll arpeggiates each bar's chord in three-finger-style eighth-note rolls (bluegrass turns it on by default), Chop plays short muted backbeat stabs (the mandolin-chop feel); it has its own Mixer strip. Keys adds an upright piano comping block chords on each bar; its Fills toggle also sprinkles a chord-tone run into every 4th bar, new each time Play builds the loop. Bass patterns: Root, Root–5th, Walking (with chromatic approaches), Boogie (the swung R-3-5-6 shuffle line), Bossa (dotted root–fifth), or Funk (syncopated with octave pops); on Root and Root–5th a <strong>Fills</strong> toggle walks up (or down) into the next chord whenever it changes — the country move that livens the simple patterns without full-time Walking — played on an upright or an electric (the Mixer's bass Samples switch; Pop, Indie Pop, and Funk preset the electric). The Mixer's guitar Samples switch likewise offers three acoustics and two electrics (E.Jazz hollowbody-ish, E.Muted for funk scratch). Shuffle swings the offbeat strums and hats onto the triplet grid (the blues preset selects it automatically). Lead improvises pentatonic notes drawn from each bar's triad position on the selected string set — Fills plays a run into every Nth bar (the /8 /4 /2 chips set how often), Solo noodles throughout; each press of Play writes a new solo, and it loops as played. The lead also rolls guitar articulations as it goes: bends into strong beats and fill endings, hammer-on/pull-off legato on quick close steps, and the occasional double stop. Saved progressions live in your browser.</p>
         <p className="mt-2">Sounds: guitar from the <a href="https://github.com/gleitz/midi-js-soundfonts" className="underline hover:text-gray-400">FatBoy SoundFont</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/" className="underline hover:text-gray-400">CC BY-SA 3.0</a>); upright bass from <a href="https://github.com/sfzinstruments/karoryfer.meatbass" className="underline hover:text-gray-400">Meatbass</a> and electric bass from <a href="https://github.com/sfzinstruments/karoryfer.black-and-blue-basses" className="underline hover:text-gray-400">Black And Blue Basses</a>, both by Karoryfer Samples (CC0); drums from the <a href="https://archive.org/details/SalamanderDrumkit" className="underline hover:text-gray-400">Salamander Drumkit</a> by Alexander Holm (public domain); brushes from <a href="https://shop.karoryfer.com/pages/free-samples" className="underline hover:text-gray-400">Swirly Drums</a> by Karoryfer Samples (CC0); upright piano from the <a href="https://github.com/sgossner/VCSL" className="underline hover:text-gray-400">Versilian Community Sample Library</a> (CC0); electric guitars (E.Black/E.Green) from <a href="https://github.com/sfzinstruments/karoryfer.black-and-green-guitars" className="underline hover:text-gray-400">Black And Green Guitars</a> by Karoryfer Samples (CC0); Osiris piano from <a href="https://github.com/sfzinstruments/Osiris_Piano" className="underline hover:text-gray-400">Osiris Piano</a> by Versilian Studios &amp; Karoryfer Samples (CC0); archtop electric (E.Shiny) from <a href="https://github.com/sfzinstruments/karoryfer.shinyguitar" className="underline hover:text-gray-400">Shinyguitar</a> by Karoryfer Samples (CC0); banjo from <a href="https://github.com/sfzinstruments/ganjo" className="underline hover:text-gray-400">ganjo</a> by itsclipping (CC0); button accordion from <a href="https://github.com/freepats/button-accordion-HN" className="underline hover:text-gray-400">FreePats</a> (CC0); Rhodes piano from <a href="https://github.com/sfzinstruments/jlearman.jRhodes3c" className="underline hover:text-gray-400">jRhodes3</a> by Jeff Learman (samples <a href="https://creativecommons.org/licenses/by-nc/4.0/" className="underline hover:text-gray-400">CC BY-NC</a> — non-commercial); electric guitar (E.Std/E.SMute) from <a href="https://sfzinstruments.github.io/guitars/standard_guitar/" className="underline hover:text-gray-400">Standard Guitar</a> by Unreal Instruments ("license-free" per bundled terms; credited anyway); acoustic guitars from Shinyguitar's acoustic variant (A.Shiny) and <a href="https://github.com/sfzinstruments/karoryfer.emilyguitar" className="underline hover:text-gray-400">Emilyguitar</a> (A.Emily), both Karoryfer Samples (CC0); <a href="https://github.com/sfzinstruments/OvationGuitar" className="underline hover:text-gray-400">Ovation Guitar</a> (A.Ovation) by S. Christian Collins; classical (A.Spanish) from <a href="https://github.com/freepats/spanish-classical-guitar" className="underline hover:text-gray-400">FreePats</a> (CC0); foot stomp from <a href="https://freesound.org/people/itinerantmonk108/sounds/740039/" className="underline hover:text-gray-400">"foot stompin"</a> by itinerantmonk108 on Freesound (CC0).</p>
       </details>
       </>)}

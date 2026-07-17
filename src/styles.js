@@ -18,9 +18,7 @@ export const PROGRESSIONS = {
   ],
   oldtime: [
     { name:'Classic (I–IV–V–I)', bars:[[0],[3],[4],[0],[0],[3],[4],[0]] },
-    { name:'Classic + Turnaround (I–VI7–II7–V7)', bars:[[0],[3],[4],[0],[0],[5,'7'],[1,'7'],[4,'7']] },
     { name:'Hank (I–IV–V–vi)', bars:[[0],[3],[4],[5,'min'],[0],[3],[4],[5,'min']] },
-    { name:'Hank + Turnaround (I–VI7–II7–V7)', bars:[[0],[3],[4],[5,'min'],[0],[5,'7'],[1,'7'],[4,'7']] },
     { name:'Bob Wills (I–VI7–ii–V7)', bars:[[0],[5,'7'],[1,'min'],[4,'7'],[0],[5,'7'],[1,'min'],[4,'7']] },
     { name:'Cabbage (I–IV–I–V)', bars:[[0],[3],[0],[4],[0],[3],[4],[0]],
       set:{ tempo:112, strum:'boomchick', drums:'train', bass:'root5' } },
@@ -427,6 +425,23 @@ export function chordOf(bar,key) {
   const root=(key+SCALE[bar.deg])%12;
   return { root, quality:bar.q, name:NOTES[root]+QS[bar.q].s, numeral:DEGS[bar.deg].n+(bar.q==='7'?'7':'') };
 }
+
+// Genre-idiomatic turnarounds: the last TURNAROUND_LEN bars a progression swaps
+// in to pull back to the top (ending on V) instead of resolving to I. Applied by
+// the Player's Turnaround toggle. Degree-based like everything else.
+const RAGTIME_TA=[[5,'7'],[1,'7'],[4,'7']];    // I → VI7–II7–V7 (country/blues/folk/rock)
+const JAZZ_TA=[[5,'min7'],[1,'min7'],[4,'7']]; // vi7–ii7–V7
+const POP_TA=[[5,'min'],[3],[4]];              // vi–IV–V (diatonic)
+export const TURNAROUND_LEN=3;
+export const TURNAROUND={
+  oldtime:RAGTIME_TA, honkytonk:RAGTIME_TA, altcountry:RAGTIME_TA, bluegrass:RAGTIME_TA, countrywaltz:RAGTIME_TA,
+  blues:RAGTIME_TA, slowblues:RAGTIME_TA, piedmont:RAGTIME_TA, rockabilly:RAGTIME_TA, rocknroll:RAGTIME_TA,
+  folk:RAGTIME_TA, folkwaltz:RAGTIME_TA,
+  jazz:JAZZ_TA, jazzwaltz:JAZZ_TA, bossa:JAZZ_TA, lofi:JAZZ_TA,
+  pop:POP_TA, indiepop:POP_TA, funk:RAGTIME_TA,
+};
+// A turnaround only fits a tune that resolves home (ends on I) with room to spare.
+export const canTurnaround=bars=>bars.length>TURNAROUND_LEN+1 && bars[bars.length-1]?.deg===0;
 
 export const DEFAULT_GENRE=GENRES.find(g=>g.key==='oldtime');
 // Initial song: the default genre's first progression, with its set overrides
