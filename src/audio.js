@@ -107,13 +107,17 @@ function getBus() {
 // The tunable half of the bus (the Mixer UI edits these): master volume and,
 // per channel, volume, reverb send, and low/high shelf gains in dB
 // (shelves at 250Hz / 2.8kHz). Fixed plumbing (pan, hp/lp) lives in getBus.
+// Reverb sends follow a small-band structure (rebalanced 2026-07-16): the
+// foundation stays dry for tightness (bass driest, then rhythm guitar / drums),
+// melodic voices sit more ambient (piano/backup moderate, lead wettest). Volumes
+// are balanced against each sample's loudness (see SET_TRIM) — leave them be.
 export const AUDIO_DEFAULTS = {
   master: 0.9,
-  guitar: { vol:0.8,  send:0.60, low:0, high:4 },
+  guitar: { vol:0.8,  send:0.20, low:3, high:4 },
   bass:   { vol:0.8,  send:0.04, low:0, high:0 },
   drums:  { vol:0.55, send:0.10, low:4, high:0 },
-  lead:   { vol:1.5,  send:0.28, low:0, high:10 },
-  piano:  { vol:0.9,  send:0.25, low:0, high:0 },
+  lead:   { vol:1.5,  send:0.28, low:0, high:6 },
+  piano:  { vol:0.9,  send:0.20, low:0, high:0 },
   backup: { vol:0.7,  send:0.15, low:0, high:2 },
 };
 
