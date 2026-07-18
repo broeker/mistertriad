@@ -10,20 +10,21 @@ export function NoteList({notes, rootIdx, strongClass='text-white'}) {
 }
 
 /* ---- Full-chord Reference Diagram (6 strings, muted strings marked x) ---- */
-export function GripDiag({grip}) {
+export function GripDiag({grip,size="normal"}) {
   if (!grip) return null;
   const cols=[6,5,4,3,2,1].map(s=>({s,d:grip.frets[s]||null}));
   const played=cols.filter(c=>c.d).map(c=>c.d.fret);
   const {minNZ,startF,endF,nFrets,hasNut}=fretWindow(played);
   const w=168,h=158,m={t:40,b:14,l:30,r:14};
   const pw=w-m.l-m.r,ph=h-m.t-m.b,ss=pw/5,fs=ph/nFrets;
+  const k=size==="large"?1.45:1; // scale the whole drawing, fonts included
   return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+    <svg width={w*k} height={h*k} viewBox={`0 0 ${w} ${h}`}>
       {hasNut
         ? <line x1={m.l-2} y1={m.t} x2={m.l+pw+2} y2={m.t} stroke="#e5e7eb" strokeWidth={3}/>
         : (<g>
-            <rect x={m.l-30} y={m.t+fs/2-9} width={27} height={17} rx={4} fill="#fbbf24" fillOpacity={0.2} stroke="#fbbf24" strokeOpacity={0.6} strokeWidth={1}/>
-            <text x={m.l-16.5} y={m.t+fs/2+0.5} fontSize="10" fill="#fbbf24" textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{minNZ}fr</text>
+            <rect x={m.l-28} y={m.t+fs/2-10} width={24} height={20} rx={5} fill="#f3f4f6"/>
+            <text x={m.l-16} y={m.t+fs/2+0.5} fontSize="12" fill="#111827" textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{minNZ}</text>
           </g>)}
       {Array.from({length:nFrets+1},(_,i)=>(<line key={i} x1={m.l} y1={m.t+i*fs} x2={m.l+pw} y2={m.t+i*fs} stroke={i===0&&hasNut?"#e5e7eb":"#4b5563"} strokeWidth={i===0&&hasNut?3:1}/>))}
       {cols.map((c,i)=>(<line key={c.s} x1={m.l+i*ss} y1={m.t} x2={m.l+i*ss} y2={m.t+nFrets*fs} stroke="#6b7280" strokeWidth={c.s>=4?1.2:0.9}/>))}
@@ -53,28 +54,29 @@ export default function FretDiag({voicing,strs,name,highlight,onClick,size="norm
   );
   const {frets,notes,rootIdx}=voicing;
   const {minNZ,startF,endF,nFrets,hasNut}=fretWindow(frets);
-  const sm=size==="small";
+  const sm=size==="small",lg=size==="large";
   const w=sm?102:128,h=sm?135:162;
   const m=sm?{t:38,b:14,l:36,r:16}:{t:44,b:18,l:42,r:20};
   const pw=w-m.l-m.r,ph=h-m.t-m.b,ss=pw/2,fs=ph/nFrets;
   const dotR=sm?10:12,fSize=sm?8:9;
+  const k=lg?1.5:1; // scale the whole drawing, fonts included
   const border=highlight?'ring-2 ring-amber-500 ring-offset-2 ring-offset-gray-950':'';
   const cursor=onClick?'cursor-pointer hover:opacity-80':'';
   return (
     <div className={`flex flex-col items-center ${cursor}`} onClick={onClick}>
-      {name&&<div className={`font-bold text-amber-400 mb-1 text-center leading-tight ${sm?'text-xs':'text-sm'}`}>{name}</div>}
-      {setLabel&&<div className="text-xs text-emerald-400 mb-0.5">{setLabel}</div>}
+      {name&&<div className={`font-bold text-amber-400 mb-1 text-center leading-tight ${sm?'text-xs':lg?'text-lg':'text-sm'}`}>{name}</div>}
+      {setLabel&&<div className={`${lg?'text-sm':'text-xs'} text-emerald-400 mb-0.5`}>{setLabel}</div>}
       <div className={`rounded-lg mt-1.5 transition-all ${highlight?'bg-amber-500/10 p-3':'p-0'} ${border}`}>
-        <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+        <svg width={w*k} height={h*k} viewBox={`0 0 ${w} ${h}`}>
           {hasNut
             ? <line x1={m.l-2} y1={m.t} x2={m.l+pw+2} y2={m.t} stroke="#e5e7eb" strokeWidth={3}/>
             : (<g>
-                <rect x={m.l-33} y={m.t+fs/2-9} width={29} height={17} rx={4} fill={accent} fillOpacity={0.2} stroke={accent} strokeOpacity={0.6} strokeWidth={1}/>
-                <text x={m.l-18.5} y={m.t+fs/2+0.5} fontSize={sm?10:11} fill={accent} textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{minNZ}fr</text>
+                <rect x={m.l-32} y={m.t+fs/2-11} width={26} height={22} rx={5} fill="#f3f4f6"/>
+                <text x={m.l-19} y={m.t+fs/2+0.5} fontSize={sm?13:14} fill="#111827" textAnchor="middle" dominantBaseline="middle" fontWeight="bold">{minNZ}</text>
               </g>)}
           {Array.from({length:nFrets+1},(_,i)=>(<line key={i} x1={m.l} y1={m.t+i*fs} x2={m.l+pw} y2={m.t+i*fs} stroke={i===0&&hasNut?"#e5e7eb":"#4b5563"} strokeWidth={i===0&&hasNut?3:1}/>))}
           {[0,1,2].map(i=>(<line key={i} x1={m.l+i*ss} y1={m.t} x2={m.l+i*ss} y2={m.t+nFrets*fs} stroke="#6b7280" strokeWidth={1.2}/>))}
-          {strs.map((s,i)=>(<text key={s} x={m.l+i*ss} y={m.t-22} fontSize={sm?"10":"11"} fill="#d1d5db" textAnchor="middle" fontFamily="monospace" fontWeight="bold">{SNAME[s]}</text>))}
+          {strs.map((s,i)=>(<text key={s} x={m.l+i*ss} y={m.t-22} fontSize={sm?"10":"11"} fill={accent} textAnchor="middle" fontFamily="monospace" fontWeight="bold">{SNAME[s]}</text>))}
           {frets.map((f,i)=>{
             const isRoot=rootIdx.includes(i);
             const iv=root!==undefined?((notes[i]-root+12)%12):null;
@@ -86,7 +88,7 @@ export default function FretDiag({voicing,strs,name,highlight,onClick,size="norm
           })}
         </svg>
       </div>
-      <div className="text-xs text-gray-300 mt-2.5">(<NoteList notes={notes} rootIdx={rootIdx}/>) <span className="text-gray-400">Frets:</span> <span className="font-semibold tabular-nums">{frets.join('-')}</span></div>
+      <div className={`${lg?'text-sm mt-3':'text-xs mt-2.5'} text-gray-300`}>(<NoteList notes={notes} rootIdx={rootIdx}/>) <span className="text-gray-400">Frets:</span> <span className="font-semibold tabular-nums">{frets.join('-')}</span></div>
     </div>
   );
 }
