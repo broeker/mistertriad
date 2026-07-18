@@ -302,6 +302,32 @@ export default function Player() {
   // The initial style's baked mix — applyGenre/applySetOverrides cover every later change.
   useEffect(()=>{ setMix(DEFAULT_SET.mix); },[]);
 
+  // Follow the sounding bar while playing: scroll its card into view when it
+  // leaves the comfortable band, and (in practice mode) switch the visible
+  // section to the one that's sounding. A recent manual wheel/touch scroll
+  // pauses the follow so it never fights the user.
+  const userScrollAt=useRef(0);
+  useEffect(()=>{
+    const mark=()=>{ userScrollAt.current=Date.now(); };
+    window.addEventListener('wheel',mark,{passive:true});
+    window.addEventListener('touchmove',mark,{passive:true});
+    return ()=>{ window.removeEventListener('wheel',mark); window.removeEventListener('touchmove',mark); };
+  },[]);
+  useEffect(()=>{
+    if (!practice||!playing||currentBar==null) return;
+    const sec=flat.map[currentBar]?.sec;
+    if (sec&&sec!==activeSec) setActiveSec(sec);
+  },[practice,playing,currentBar,flat,activeSec]);
+  useEffect(()=>{
+    if (!playing||currentBar==null) return;
+    if (Date.now()-userScrollAt.current<3000) return;
+    const el=document.querySelector('[data-curbar]');
+    if (!el) return;
+    const r=el.getBoundingClientRect();
+    if (r.top>=72&&r.bottom<=window.innerHeight-72) return; // already comfortably visible
+    el.scrollIntoView({block:'center',behavior:'smooth'});
+  },[playing,currentBar,activeSec]);
+
   // Keep the screen awake while playing or in practice mode (tablet on a music
   // stand). The lock drops whenever the tab is hidden, so re-acquire on return.
   const wakeRef=useRef(null);
@@ -926,24 +952,25 @@ export default function Player() {
           </div>
           )}
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+        <div className={practice?'grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3':'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2'}>
           {bars.map((bar,i)=>{
             const fi=dispStart+i;
             const ch=chords[fi];
             const isCur=currentBar!=null&&flat.map[currentBar]?.sec===activeSec&&flat.map[currentBar]?.j===i;
             const isEdit=editIdx===i;
             const isPick=pickIdx===i;
+            const dSize=practice?'large':'small';
             return (
-              <div key={i} onClick={()=>{ if (view==='triads') { setPickIdx(isPick?null:i); setEditIdx(null); } else setEditIdx(isEdit?null:i); }}
+              <div key={i} data-curbar={isCur||undefined} onClick={()=>{ if (view==='triads') { setPickIdx(isPick?null:i); setEditIdx(null); } else setEditIdx(isEdit?null:i); }}
                    className={`relative cursor-pointer rounded-lg border px-2 pt-1.5 pb-2 flex flex-col items-center transition-all ${isCur?'border-amber-500 bg-amber-500/10':isEdit||isPick?'border-emerald-500 bg-emerald-500/10':'border-gray-800 bg-gray-950 hover:border-gray-600'}`}>
-                <div className="text-[10px] text-gray-600 self-start">bar {i+1}{view==='triads'&&multi&&triadPath[fi]&&<span className="font-semibold" style={{color:triadPath[fi].set.color}}> · {triadPath[fi].set.label}</span>}{barPinVal(i)!=null&&<span className="text-emerald-500"> · pinned</span>}</div>
-                <div className="text-sm font-bold text-amber-400">{ch.name} <span className="text-gray-500 font-normal text-xs">({ch.numeral})</span></div>
+                <div className={`${practice?'text-sm':'text-[10px]'} text-gray-600 self-start`}>bar {i+1}{view==='triads'&&multi&&triadPath[fi]&&<span className="font-semibold" style={{color:triadPath[fi].set.color}}> · {triadPath[fi].set.label}</span>}{barPinVal(i)!=null&&<span className="text-emerald-500"> · pinned</span>}</div>
+                <div className={`${practice?'text-2xl':'text-sm'} font-bold text-amber-400`}>{ch.name} <span className={`text-gray-500 font-normal ${practice?'text-base':'text-xs'}`}>({ch.numeral})</span></div>
                 {view==='cowboy'
                   ? (grips[fi]
-                      ? <GripDiag grip={grips[fi]}/>
-                      : (triadPath[fi]?<FretDiag voicing={triadPath[fi]} strs={triadPath[fi].set.strs} name={null} root={ch.root} size="small" accent={triadPath[fi].set.color}/>:<div className="text-xs text-gray-600 italic p-4">no grip</div>))
+                      ? <GripDiag grip={grips[fi]} size={practice?'large':'normal'}/>
+                      : (triadPath[fi]?<FretDiag voicing={triadPath[fi]} strs={triadPath[fi].set.strs} name={null} root={ch.root} size={dSize} accent={triadPath[fi].set.color}/>:<div className="text-xs text-gray-600 italic p-4">no grip</div>))
                   : (triadPath[fi]
-                      ? <FretDiag voicing={triadPath[fi]} strs={triadPath[fi].set.strs} name={null} root={ch.root} size="small" accent={triadPath[fi].set.color}/>
+                      ? <FretDiag voicing={triadPath[fi]} strs={triadPath[fi].set.strs} name={null} root={ch.root} size={dSize} accent={triadPath[fi].set.color}/>
                       : <div className="text-xs text-gray-600 italic p-4">no voicing</div>)}
                 {isPick&&(()=>{
                   const all=candidatesFor(ch);
@@ -992,9 +1019,9 @@ export default function Player() {
           })}
           {view==='triads'&&upNext?.path[0]&&(
             <div className={`rounded-lg border border-dashed px-2 pt-1.5 pb-2 flex flex-col items-center transition-all ${climbPulse?'border-amber-400 ring-1 ring-amber-400/70 animate-pulse':'border-gray-600'}`}>
-              <div className="text-[10px] text-amber-400/90 self-start">next loop · pos {upNext.anchor+1} · {fretWindow(upNext.path[0])}</div>
-              <div className="text-sm font-bold text-amber-400">{chords[0].name} <span className="text-gray-500 font-normal text-xs">({chords[0].numeral})</span></div>
-              <FretDiag voicing={upNext.path[0]} strs={upNext.path[0].set.strs} name={null} root={chords[0].root} size="small" accent={upNext.path[0].set.color}/>
+              <div className={`${practice?'text-sm':'text-[10px]'} text-amber-400/90 self-start`}>next loop · pos {upNext.anchor+1} · {fretWindow(upNext.path[0])}</div>
+              <div className={`${practice?'text-2xl':'text-sm'} font-bold text-amber-400`}>{chords[0].name} <span className={`text-gray-500 font-normal ${practice?'text-base':'text-xs'}`}>({chords[0].numeral})</span></div>
+              <FretDiag voicing={upNext.path[0]} strs={upNext.path[0].set.strs} name={null} root={chords[0].root} size={practice?'large':'small'} accent={upNext.path[0].set.color}/>
             </div>
           )}
           {!bars.length&&(
