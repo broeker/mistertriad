@@ -342,7 +342,7 @@ export const BACKUP_TOP = 71; // ganjo's highest sampled root — keep the octav
 export const GENRE_GROUPS = ['Country','Blues','Folk','Rock & Pop','Jazz & Latin','Groove'];
 export const GENRES = [
   // Country
-  { key:'oldtime',    group:'Country', label:'Old-Time',      tempo:100, feel:'straight', strum:'boomchick', drums:'train', bass:'root5',  lead:'off',   drumFills:false, keys:'off', mix:{guitar:1.1,drums:0.85} },
+  { key:'oldtime',    group:'Country', label:'Old-Time',      tempo:100, feel:'straight', strum:'boomchick', drums:'train', bass:'root5',  lead:'off',   leadEvery:2, drumFills:false, keys:'off', guitarInst:'musyng', mix:{guitar:0.94,bass:0.94,drums:1.45} },
   { key:'bluegrass',  group:'Country', label:'Bluegrass',     tempo:145, feel:'straight', strum:'bluegrass', drums:'off',   bass:'walk',   lead:'fills', drumFills:false, keys:'off', backup:'roll', mix:{guitar:1.1,bass:1.15} },
   { key:'honkytonk',  group:'Country', label:'Honky-Tonk',    tempo:105, feel:'shuffle',  strum:'boomchick', drums:'kit',   bass:'root5',  bassFills:true, lead:'fills', drumFills:false, keys:'on',  guitarInst:'jazz', mix:{piano:1.15} },
   { key:'altcountry', group:'Country', label:'Alt Country',   tempo:95,  feel:'straight', strum:'folk',      drums:'kit',   bass:'root5',  lead:'off',   drumFills:true,  keys:'on' },
