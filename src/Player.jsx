@@ -325,7 +325,14 @@ export default function Player() {
     localStorage.setItem(MIXER_KEY,JSON.stringify(next));
     return next;
   });
-  const resetMixer=()=>{ localStorage.removeItem(MIXER_KEY); setMixer(JSON.parse(JSON.stringify(AUDIO_DEFAULTS))); };
+  // Reset restores the sample sets too — they live in the Mixer panel, so
+  // "Reset" means the whole panel: volumes and the current style's instruments.
+  const resetMixer=()=>{
+    localStorage.removeItem(MIXER_KEY); setMixer(JSON.parse(JSON.stringify(AUDIO_DEFAULTS)));
+    const g=GENRES.find(x=>x.key===genre);
+    setGuitarSet(g?.guitarInst||'fatboy'); setBassSet(g?.bassInst||'upright');
+    setPianoSet(g?.pianoInst||'vcsl'); setBackupSet(g?.backupInst||'banjo');
+  };
 
   // Manual meter switch: pull knobs that don't exist in the new meter back to
   // ones that do, in the same update, so buildSchedule never sees a bad combo.
