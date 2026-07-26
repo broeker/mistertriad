@@ -3,3 +3,6 @@ dist
 .DS_Store
 *.local
 .playwright-mcp
+
+# Lesson tabs — third-party copyrighted source material, kept local
+tabs

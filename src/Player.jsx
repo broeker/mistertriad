@@ -13,7 +13,7 @@ import {
   chordOf, DEFAULT_GENRE, DEFAULT_PROG, DEFAULT_SET,
   TURNAROUND, TURNAROUND_LEN, canTurnaround,
 } from './styles.js';
-import { buildSchedule as buildScheduleFn, centerOf, posCost, pinKeyOf } from './arranger.js';
+import { buildSchedule as buildScheduleFn, centerOf, posCost, pinKeyOf, pinMatches, resolvePin } from './arranger.js';
 import { usePersistentState } from './hooks.js';
 
 // Preload every sample a schedule needs, routed to its instrument channel.
@@ -176,7 +176,11 @@ export default function Player() {
       // Pins are scoped per (section:bar:position), so each neck position keeps
       // its own picks; a bare section:bar key (legacy saves) applies everywhere.
       const pin=!m?null:(pins[`${m.sec}:${m.j}:${anchor}`]??pins[`${m.sec}:${m.j}`]??null);
-      const pinned=pin!=null?cands.find(v=>pinKeyOf(v)===pin):null;
+      // Shape pins ("321#3rd") can land at more than one octave; they resolve
+      // against the previous bar — or, on bar 1, against the pass anchor.
+      let ref=i>0?path[i-1]:null;
+      if (pin!=null&&i===0) { const list=anchorsFrom(cands); ref=list[Math.min(anchor,Math.max(0,list.length-1))]||null; }
+      const pinned=resolvePin(pin,cands,ref);
       if (pinned) { path.push(pinned); win=centerOf(pinned); continue; }
       // Randomize picks (within the position window) — a pin above overrides them.
       const roll=!m?null:rolls[`${m.sec}:${m.j}:${anchor}`];
@@ -513,7 +517,13 @@ export default function Player() {
   const applyProgression=p=>{
     setSectionBars(activeSec,toBars(p.bars));
     setEditIdx(null); setPickIdx(null); setMoreOpen(false); setPosIdx(0); setPosSel([]);
-    setPins(ps=>Object.fromEntries(Object.entries(ps).filter(([k])=>!k.startsWith(activeSec+':'))));
+    setPins(ps=>{
+      const n=Object.fromEntries(Object.entries(ps).filter(([k])=>!k.startsWith(activeSec+':')));
+      // A transcribed progression ships its own voicings, keyed by bar index.
+      // Seeded unscoped (no :position suffix) so they hold in every position.
+      for (const [i,v] of Object.entries(p.pins||{})) n[`${activeSec}:${i}`]=v;
+      return n;
+    });
     setRolls({}); setTaSecs({}); applySetOverrides(p);
   };
   // Pins are keyed "section:barIndex" or "section:barIndex:position"; structural
@@ -1001,7 +1011,7 @@ export default function Player() {
                         <button onClick={()=>setPins(ps=>{const n={...ps};delete n[pk];delete n[`${activeSec}:${i}`];return n;})} className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${effPin==null?'bg-emerald-600 text-white':'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>Auto</button>
                         {vsp.map(v=>{
                           const k=pinKeyOf(v);
-                          const pinned=effPin===k,current=k===curKey;
+                          const pinned=pinMatches(effPin,v),current=k===curKey;
                           return (
                             <div key={k} onClick={()=>setPins(ps=>({...ps,[pk]:k}))}
                               className={`cursor-pointer rounded-lg border p-1.5 pb-0.5 flex flex-col items-center transition-all ${pinned?'border-amber-500 bg-amber-500/10':current?'border-emerald-600 bg-emerald-500/10':'border-gray-700 bg-gray-900 hover:border-gray-500'}`}>

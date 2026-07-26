@@ -32,6 +32,26 @@ export function leadPool(ch, voicing, strs) {
 // fret); used to order anchor positions and as the pass's fret window.
 export const centerOf=v=>{const nz=v.frets.filter(f=>f>0);return nz.length?(Math.min(...nz)+Math.max(...v.frets))/2:0;};
 export const pinKeyOf=v=>v?`${v.set.key}:${voicingKey(v)}`:'';
+// A pin can also name a *shape* instead of a fret position: "321#3rd" means "the
+// 3rd-in-bass triad on the 3-2-1 set", wherever that lands in the current key.
+// Progressions transcribed from a lesson carry this form so the lesson's
+// inversion sequence survives transposition; the Voicing picker still writes the
+// exact fret form, and saved songs keep whichever they were saved with.
+export const invPinOf=v=>v?`${v.set.key}#${v.inv.split(' ')[0]}`:'';
+export const pinMatches=(pin,v)=>pin!=null&&(pin.includes('#')?invPinOf(v)===pin:pinKeyOf(v)===pin);
+// Resolve either pin form against a bar's candidates. A shape pin can match at
+// more than one octave, so `ref` — the previous bar's voicing, or the pass
+// anchor on bar 1 — picks the nearest, which is what keeps the hand in position.
+export function resolvePin(pin,cands,ref) {
+  const ms=pin==null?[]:cands.filter(v=>pinMatches(pin,v));
+  if (ms.length<2) return ms[0]||null;
+  const closed=ms.filter(v=>!hasOpenString(v.frets));
+  const pool=closed.length?closed:ms;
+  if (!ref) return pool[0];
+  let best=null,bs=Infinity;
+  for (const v of pool){const d=Math.abs(centerOf(v)-centerOf(ref));if(d<bs){bs=d;best=v;}}
+  return best;
+}
 const pitchesOf=v=>v.set.strs.map((s,i)=>STRING_MIDI[s]+v.frets[i]);
 // Position-playing cost: distance from the pass's fret window (the neck
 // position) dominates, so each chord takes whichever set keeps the hand in the

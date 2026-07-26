@@ -35,6 +35,21 @@ export const PROGRESSIONS = {
     { name:'I–V–vi–IV', bars:[[0],[4],[5,'min'],[3],[0],[4],[5,'min'],[3]] },
     { name:'vi–IV–I–V', bars:[[5,'min'],[3],[0],[4],[5,'min'],[3],[0],[4]] },
     { name:'50s (I–vi–IV–V)', bars:[[0],[5,'min'],[3],[4],[0],[5,'min'],[3],[4]] },
+    // ActiveMelody ML111 ("Compliment cowboy chords with triads"), written in G
+    // at 70bpm: two passes of I–vi–V–ii, a IV–V lift, then I–vi–IV–V twice. The
+    // lesson's closing G is the loop's return to bar 1, so it isn't a 19th bar.
+    // Its triads are the lesson: three inversions on the 3-2-1 set, stated at the
+    // nut in bars 1-8 and up the neck from bar 9. Pinned as shapes rather than
+    // frets (see resolvePin) so the sequence transposes with the song key —
+    // bars 6 and 18 embellish rather than state the chord, so they take the
+    // inversion of the bar they repeat (2 and 14).
+    { name:'ML111', bars:[[0],[5,'min'],[4],[1,'min'],[0],[5,'min'],[4],[1,'min'],[3],[4],[0],[5,'min'],[3],[4],[0],[5,'min'],[3],[4]],
+      set:{ tempo:70 },
+      pins:{ 0:'321#3rd', 1:'321#5th', 2:'321#Root', 3:'321#3rd',
+             4:'321#3rd', 5:'321#5th', 6:'321#Root', 7:'321#3rd',
+             8:'321#3rd', 9:'321#3rd',
+             10:'321#5th', 11:'321#Root', 12:'321#3rd', 13:'321#3rd',
+             14:'321#5th', 15:'321#Root', 16:'321#3rd', 17:'321#3rd' } },
     { name:'Jangle (I–IV)', bars:[[0],[0],[3],[3],[0],[0],[3],[3]] },
   ],
   lofi: [
