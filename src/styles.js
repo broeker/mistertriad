@@ -51,6 +51,9 @@ export const PROGRESSIONS = {
              10:'321#5th', 11:'321#Root', 12:'321#3rd', 13:'321#3rd',
              14:'321#5th', 15:'321#Root', 16:'321#3rd', 17:'321#3rd' } },
     { name:'Jangle (I–IV)', bars:[[0],[0],[3],[3],[0],[0],[3],[3]] },
+    // Via Chicago-style: I–V–IV sounding in D (Tweedy plays C shapes capo 2).
+    { name:'Chicago (I–V–IV)', bars:[[0],[4],[3],[3],[0],[4],[3],[0]],
+      set:{ tempo:72 } },
   ],
   lofi: [
     { name:'ii7–V7–Imaj7', bars:[[1,'min7'],[4,'7'],[0,'maj7'],[0,'maj7'],[1,'min7'],[4,'7'],[0,'maj7'],[0,'maj7']] },
