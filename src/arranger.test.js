@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { getVoicings, QS, voicingKey, hasOpenString } from './music.js';
 import { STRING_SETS, SCALE } from './music.js';
 import { PROGRESSIONS } from './styles.js';
-import { centerOf, pinKeyOf, invPinOf, pinMatches, resolvePin } from './arranger.js';
+import { centerOf, pinKeyOf, invPinOf, pinMatches, resolvePin, transposeSchedule } from './arranger.js';
 
 const ML111 = PROGRESSIONS.altcountry.find(p => p.name === 'ML111');
 const SET = STRING_SETS.find(s => s.key === '321');
@@ -88,3 +88,57 @@ describe('ML111', () => {
 });
 
 const OPEN_PC = { 1: 4, 2: 11, 3: 7, 4: 2, 5: 9, 6: 4 };
+
+// A fake schedule exercising every event shape transposeSchedule touches: strum
+// (pitch lives in guitarMidis, not on the event), drum (no pitch at all), bass
+// and pianoNote/gfill (single m), piano (m is an array — see buildSchedule's
+// pushBass/pv sites), and lead with a double-stop art (relative bend fields
+// must NOT move).
+const fakeSchedule = () => ({
+  events: [
+    { t: 0, type: 'strum', i: 0, dir: 1, g: 1, span: 'full' },
+    { t: 0, type: 'drum', kind: 'kick', g: 1 },
+    { t: 0, type: 'bass', m: 45, g: 1 },
+    { t: 0, type: 'piano', m: [60, 64], g: 1 },
+    { t: 0, type: 'lead', m: 72, g: 1, art: { double: 76, bendFrom: -2 } },
+  ],
+  loopDur: 4, barDur: 4, spb: 1,
+  guitarMidis: [[60, 64, 67]],
+  gfillMidis: [40],
+  bassMidis: [45],
+  leadMidis: [72, 76],
+  pianoMidis: [60, 64],
+  backupMidis: [50],
+  passBars: 1,
+});
+
+describe('transposeSchedule', () => {
+  it('is a no-op (identity) at semis 0', () => {
+    const sc = fakeSchedule();
+    expect(transposeSchedule(sc, 0)).toBe(sc);
+  });
+
+  it('shifts every pitched midi, leaves drums and relative art alone, and does not mutate the input', () => {
+    const sc = fakeSchedule();
+    const orig = JSON.parse(JSON.stringify(sc));
+    const t = transposeSchedule(sc, 2);
+
+    expect(t.guitarMidis).toEqual([[62, 66, 69]]);
+    expect(t.gfillMidis).toEqual([42]);
+    expect(t.bassMidis).toEqual([47]);
+    expect(t.leadMidis).toEqual([74, 78]);
+    expect(t.pianoMidis).toEqual([62, 66]);
+    expect(t.backupMidis).toEqual([52]);
+
+    const [strum, drum, bass, piano, lead] = t.events;
+    expect(strum).toEqual(sc.events[0]); // no m — unchanged
+    expect(drum).toEqual(sc.events[1]); // no pitch — unchanged
+    expect(bass.m).toBe(47);
+    expect(piano.m).toEqual([62, 66]); // array m
+    expect(lead.m).toBe(74);
+    expect(lead.art.double).toBe(78);
+    expect(lead.art.bendFrom).toBe(-2); // relative — untouched
+
+    expect(sc).toEqual(orig); // input schedule not mutated
+  });
+});

@@ -263,3 +263,21 @@ export function buildSchedule({
     events.sort((a,b)=>a.t-b.t);
     return {events,loopDur,barDur,spb,guitarMidis,gfillMidis,bassMidis,leadMidis,pianoMidis,backupMidis,passBars};
 }
+
+// Capo: the schedule is built from shape-key voicings; shifting every pitched
+// midi up by the capo's semitones is exactly what the capo does to the guitar,
+// and it carries the whole band to the sounding key. Drums have no pitch.
+export function transposeSchedule(sc, semis) {
+  if (!semis) return sc;
+  const tm=m=>Array.isArray(m)?m.map(x=>x+semis):m+semis;
+  return {
+    ...sc,
+    guitarMidis: sc.guitarMidis.map(a=>a.map(m=>m+semis)),
+    gfillMidis: sc.gfillMidis.map(m=>m+semis),
+    bassMidis: sc.bassMidis.map(m=>m+semis),
+    leadMidis: sc.leadMidis.map(m=>m+semis),
+    pianoMidis: sc.pianoMidis.map(m=>m+semis),
+    backupMidis: sc.backupMidis.map(m=>m+semis),
+    events: sc.events.map(ev=>ev.m==null&&ev.art?.double==null?ev:{...ev,...(ev.m!=null&&{m:tm(ev.m)}),...(ev.art?.double!=null&&{art:{...ev.art,double:ev.art.double+semis}})}),
+  };
+}
