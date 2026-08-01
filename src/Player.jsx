@@ -518,15 +518,25 @@ export default function Player() {
     setRolls({}); setTaSecs({}); setSuggestOpen(false); setPosIdx(0); setPosSel([]);
   };
 
-  // Fills the active section (build a chorus by switching tabs and picking again).
+  // Fills the active section (build a chorus by switching tabs and picking
+  // again). A progression with `chorus` bars is a whole song form instead: it
+  // fills Verse and Chorus regardless of the active tab and sets the
+  // arrangement to Verse → Chorus.
   const applyProgression=p=>{
-    setSectionBars(activeSec,toBars(p.bars));
+    const song=!!p.chorus;
+    if (song) {
+      setSections(s=>({...s,A:toBars(p.bars),B:toBars(p.chorus)}));
+      setArrangement(['A','B']); setActiveSec('A');
+    } else {
+      setSectionBars(activeSec,toBars(p.bars));
+    }
     setEditIdx(null); setPickIdx(null); setMoreOpen(false); setPosIdx(0); setPosSel([]);
     setPins(ps=>{
-      const n=Object.fromEntries(Object.entries(ps).filter(([k])=>!k.startsWith(activeSec+':')));
+      const cleared=song?['A','B']:[activeSec];
+      const n=Object.fromEntries(Object.entries(ps).filter(([k])=>!cleared.some(sec=>k.startsWith(sec+':'))));
       // A transcribed progression ships its own voicings, keyed by bar index.
       // Seeded unscoped (no :position suffix) so they hold in every position.
-      for (const [i,v] of Object.entries(p.pins||{})) n[`${activeSec}:${i}`]=v;
+      for (const [i,v] of Object.entries(p.pins||{})) n[`${song?'A':activeSec}:${i}`]=v;
       return n;
     });
     setRolls({}); setTaSecs({}); applySetOverrides(p);
@@ -700,7 +710,7 @@ export default function Player() {
                 return (
                   <button key={p.name} onClick={()=>applyProgression(p)} className={`text-left px-3 py-2 rounded-md transition-all ${active?'bg-amber-500/15 border border-amber-500/60':'bg-gray-950 border border-gray-800 hover:border-gray-600'}`}>
                     <div className={`text-sm font-medium ${active?'text-amber-400':'text-gray-200'}`}>{p.name}</div>
-                    <div className="text-xs text-gray-500">{progSummary(p.bars)} <span className="text-gray-600">· {p.bars.length} bars</span></div>
+                    <div className="text-xs text-gray-500">{progSummary(p.bars)} <span className="text-gray-600">· {p.bars.length} bars{p.chorus?` + ${p.chorus.length}-bar chorus`:''}</span></div>
                   </button>
                 );
               })}

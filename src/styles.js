@@ -8,6 +8,9 @@ import { NOTES, SCALE, DEGS, QS } from './music.js';
 // Some appear under several genres — that's how music works.
 // A progression may carry a `set` object pinning any of the band knobs
 // (tempo, feel, strum, drums, bass, lead); knobs it omits are left alone.
+// A progression may also carry `chorus` bars — applying one of those loads a
+// whole song form: `bars` fill the Verse, `chorus` fills the Chorus, and the
+// arrangement becomes Verse → Chorus.
 export const PROGRESSIONS = {
   blues: [
     { name:'12-Bar Blues', bars:[[0],[0],[0],[0],[3],[3],[0],[0],[4,'7'],[3],[0],[4,'7']] },
@@ -54,6 +57,14 @@ export const PROGRESSIONS = {
     // Via Chicago-style: I–V–IV sounding in D (Tweedy plays C shapes capo 2).
     { name:'Chicago (I–V–IV)', bars:[[0],[4],[3],[3],[0],[4],[3],[0]],
       set:{ tempo:72 } },
+    // Townes Van Zandt, "Pancho and Lefty" — C shapes, capo 1 on the record
+    // (sounds in C#). Two bars per lyric line; the quick F–C split bar on
+    // "...said good-bye" is stretched to a full bar of each since bars hold one
+    // chord, so the tail of both sections runs vi–IV–I–V–IV–vi. The chorus is
+    // the back half of the verse form ("All the Federales say…").
+    { name:'Pancho & Lefty', bars:[[0],[0],[4],[4],[3],[3],[0],[4],[3],[3],[0],[3],[5,'min'],[3],[0],[4],[3],[5,'min']],
+      chorus:[[3],[3],[0],[3],[5,'min'],[3],[0],[4],[3],[5,'min']],
+      set:{ tempo:96 } },
   ],
   lofi: [
     { name:'ii7–V7–Imaj7', bars:[[1,'min7'],[4,'7'],[0,'maj7'],[0,'maj7'],[1,'min7'],[4,'7'],[0,'maj7'],[0,'maj7']] },
